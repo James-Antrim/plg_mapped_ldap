@@ -1,1 +1,2 @@
-# plg_organizer_ldap
+# Sorted LDAP
+Sorts users into predefined groups during the authentication process.
