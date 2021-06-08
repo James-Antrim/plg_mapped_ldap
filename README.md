@@ -1,2 +1,2 @@
 # Sorted LDAP
-Sorts users into predefined groups during the authentication process.
+Sorts users into predefined groups during the LDAP authentication process.
