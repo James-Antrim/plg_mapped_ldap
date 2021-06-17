@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension version="3.0" type="plugin" group="authentication" method="upgrade">
+    <name>plg_mapped_ldap</name>
+    <author>James Antrim</author>
+    <authorEmail>james.antrim@nm.thm.de</authorEmail>
+    <authorUrl>www.thm.de</authorUrl>
+    <creationDate>June 2021</creationDate>
+    <copyright>TH Mittelhessen 2020</copyright>
+    <licence>GNU GPL v.3</licence>
+    <version>3.0.0</version>
+    <description>MAPPED_LDAP_DESC</description>
+    <files>
+        <filename plugin="mapped_ldap">mapped_ldap.php</filename>
+    </files>
+    <languages>
+        <language tag="de-DE">de-DE/de-DE.plg_authentication_mapped_ldap.ini</language>
+        <language tag="de-DE">de-DE/de-DE.plg_authentication_mapped_ldap.sys.ini</language>
+        <language tag="en-GB">en-GB/en-GB.plg_authentication_mapped_ldap.ini</language>
+        <language tag="en-GB">en-GB/en-GB.plg_authentication_mapped_ldap.sys.ini</language>
+    </languages>
+    <config>
+        <fields name="params">
+            <fieldset name="basic" addfieldpath="/plugins/authentication/mapped_ldap/Fields">
+                <field name="default" type="usersDefault" label="MAPPED_LDAP_USERS_DEFAULT"
+                       description="MAPPED_LDAP_USERS_DEFAULT_DESC"/>
+                <!--<field name="handling" type="list" label="MAPPED_LDAP_HANDLING" description="MAPPED_LDAP_HANDLING_DESC"
+                       default="0">
+                    <option value="0">MAPPED_LDAP_HANDLING_SUPPLEMENT</option>
+                    <option value="1">MAPPED_LDAP_HANDLING_CORRECT</option>
+                </field>-->
+                <field name="domain" type="text" label="MAPPED_LDAP_EMAIL_DOMAIN"
+                       description="MAPPED_LDAP_EMAIL_DOMAIN_DESC" hint="thm.de" size="20"/>
+                <field name="rules" type="subform" label="MAPPED_LDAP_RULES" description="MAPPED_LDAP_RULES_DESC"
+                       buttons="add,remove" layout="joomla.form.field.subform.repeatable-table" multiple="true">
+                    <form>
+                        <field name="groupID" type="usergrouplist" label="MAPPED_LDAP_USER_GROUP" required="true">
+                            <option value="">MAPPED_LDAP_SELECT_USER_GROUP</option>
+                        </field>
+                        <field name="ldap_group" type="text" label="MAPPED_LDAP_LDAP_GROUP"
+                               description="MAPPED_LDAP_LDAP_GROUP_DESC" size="20"/>
+                        <field name="subdomain" type="text" label="MAPPED_LDAP_EMAIL_SUBDOMAIN"
+                               description="MAPPED_LDAP_EMAIL_SUBDOMAIN_DESC" size="20"/>
+                    </form>
+                </field>
+            </fieldset>
+            <fieldset name="connection" label="MAPPED_LDAP_CONNECTION">
+                <field name="host" type="text" label="MAPPED_LDAP_HOST" description="MAPPED_LDAP_HOST_DESC" size="20"/>
+                <field name="port" type="number" label="MAPPED_LDAP_PORT" description="MAPPED_LDAP_PORT_DESC"
+                       default="389" filter="integer" hint="389" min="1" max="65535" size="5" validate="number"/>
+                <field name="negotiate_tls" type="radio" label="MAPPED_LDAP_NEGOTIATE"
+                       description="MAPPED_LDAP_NEGOTIATE_DESC"
+                       class="btn-group btn-group-yesno" default="1" filter="integer">
+                    <option value="1">JYES</option>
+                    <option value="0">JNO</option>
+                </field>
+                <field name="ignore_reqcert_tls" type="radio" label="MAPPED_LDAP_IGNORE_CERTIFICATE"
+                       description="MAPPED_LDAP_IGNORE_CERTIFICATE_DESC"
+                       class="btn-group btn-group-yesno" default="0" filter="integer">
+                    <option value="1">JYES</option>
+                    <option value="0">JNO</option>
+                </field>
+                <field name="no_referrals" type="radio" label="MAPPED_LDAP_ALLOW_REFERRALS"
+                       description="MAPPED_LDAP_ALLOW_REFERRALS_DESC"
+                       class="btn-group btn-group-yesno" default="1" filter="integer">
+                    <option value="1">JYES</option>
+                    <option value="0">JNO</option>
+                </field>
+                <field name="username" type="text" label="MAPPED_LDAP_ADMIN_USERNAME"
+                       description="MAPPED_LDAP_ADMIN_USERNAME_DESC" size="20"/>
+                <field name="password" type="password" label="MAPPED_LDAP_ADMIN_PASSWORD"
+                       description="MAPPED_LDAP_ADMIN_PASSWORD_DESC" size="20"/>
+                <field name="ldap_debug" type="radio" label="MAPPED_LDAP_DEBUG" description="MAPPED_LDAP_DEBUG_DESC"
+                       class="btn-group btn-group-yesno" default="0" filter="integer">
+                    <option value="1">JYES</option>
+                    <option value="0">JNO</option>
+                </field>
+            </fieldset>
+            <fieldset name="search" label="MAPPED_LDAP_SEARCH">
+                <field name="method" type="list" label="MAPPED_LDAP_METHOD" description="MAPPED_LDAP_METHOD_DESC">
+                    <option value="0">MAPPED_LDAP_METHOD_SEARCH</option>
+                    <option value="1">MAPPED_LDAP_METHOD_DIRECT</option>
+                </field>
+                <field name="base_dn" type="text" label="MAPPED_LDAP_QUERY_DOMAIN"
+                       description="MAPPED_LDAP_QUERY_DOMAIN_DESC"
+                       size="20"/>
+                <field name="search" type="text" label="MAPPED_LDAP_QUERY" description="MAPPED_LDAP_QUERY_DESC"
+                       size="20"/>
+                <field name="users_dn" type="text" label="MAPPED_LDAP_USERS_DOMAIN"
+                       description="MAPPED_LDAP_USERS_DOMAIN_DESC" size="20"/>
+            </fieldset>
+            <fieldset name="properties" label="MAPPED_LDAP_PROPERTIES">
+                <field name="name" type="text" label="MAPPED_LDAP_NAME" description="MAPPED_LDAP_NAME_DESC"
+                       default="displayName" hint="displayName" size="20"/>
+                <field name="email" type="text" label="MAPPED_LDAP_EMAIL" description="MAPPED_LDAP_EMAIL_DESC"
+                       default="mail" hint="mail" size="20"/>
+                <field name="user_username" type="text" label="MAPPED_LDAP_USERNAME"
+                       description="MAPPED_LDAP_USERNAME_DESC" default="uid" hint="uid" size="20"/>
+                <field name="ldap_groups" type="text" label="MAPPED_LDAP_LDAP_GROUPS"
+                       description="MAPPED_LDAP_LDAP_GROUPS_DESC"
+                       default="userClass" hint="userClass" size="20"/>
+                <field name="emails" type="text" label="MAPPED_LDAP_EMAILS" description="MAPPED_LDAP_EMAILS_DESC"
+                       hint="gifb-mailaddress" size="20"/>
+            </fieldset>
+        </fields>
+    </config>
+</extension>

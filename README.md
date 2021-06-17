@@ -1,2 +1,3 @@
-# Sorted LDAP
-Sorts users into predefined groups during the LDAP authentication process.
+# Mapped LDAP
+
+Maps users via configurable rules into groups during the LDAP authentication process.
