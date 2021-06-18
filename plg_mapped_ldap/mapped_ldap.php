@@ -200,36 +200,40 @@ class PlgAuthenticationMapped_LDAP extends JPlugin
 			}
 
 			// Avoid running trim on individual array items
-			$groups    = str_replace(' ', '', $rule->ldap_group);
-			$groups    = explode(',', $groups);
-			$subDomain = $rule->subdomain;
+			$groups     = str_replace(' ', '', $rule->ldap_group);
+			$groups     = explode(',', $groups);
+			$subDomains = str_replace(' ', '', $rule->subdomain);
+			$subDomains = explode(',', $subDomains);
 
-			// Check for group relevance
-			if ($groups and !array_intersect($groups, $ldapGroups))
+			// The rule restricts groups and the person is either not assigned a group or not assigned a relevant group.
+			if ($groups and !$ldapGroups and !array_intersect($groups, $ldapGroups))
 			{
 				continue;
 			}
 
 			// Check for subdomain relevance
-			if ($subDomain)
+			if ($subDomains)
 			{
 				$relevant = false;
 
-				// Email was already assigned => variable name safe.
-				foreach ($emails as $email)
+				foreach ($subDomains as $subDomain)
 				{
-					$pieces = explode('@', $email);
-
-					// Invalid or irrelevant
-					if (!$emailDomain = array_pop($pieces) or strpos($emailDomain, ".$domain") === false)
+					// Email was already assigned => variable name safe.
+					foreach ($emails as $email)
 					{
-						continue;
-					}
+						$pieces = explode('@', $email);
 
-					if (str_replace(".$domain", '', $emailDomain) === $subDomain)
-					{
-						$relevant = true;
-						break;
+						// Invalid or irrelevant
+						if (!$emailDomain = array_pop($pieces) or strpos($emailDomain, ".$domain") === false)
+						{
+							continue;
+						}
+
+						if (str_replace(".$domain", '', $emailDomain) === $subDomain)
+						{
+							$relevant = true;
+							break 2;
+						}
 					}
 				}
 
