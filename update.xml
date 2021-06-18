@@ -13,7 +13,7 @@
         <maintainerurl>https://www.thm.de/organizer</maintainerurl>
         <downloads>
             <downloadurl type="full" format="zip">
-                https://github.com/James-Antrim/plg_mapped_ldap/raw/main/update.zip
+                https://github.com/James-Antrim/plg_mapped_ldap/raw/main/plg_mapped_ldap.zip
             </downloadurl>
         </downloads>
     </update>
