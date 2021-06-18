@@ -103,4 +103,9 @@
             </fieldset>
         </fields>
     </config>
+    <updateservers>
+        <server type="extension" name="Mapped LDAP" priority="1">
+            https://github.com/James-Antrim/plg_mapped_ldap/raw/main/update.xml
+        </server>
+    </updateservers>
 </extension>
