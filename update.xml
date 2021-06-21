@@ -4,7 +4,7 @@
         <description>This plugin maps authenticating users to user groups by configurable rules.</description>
         <element>mapped_ldap</element>
         <type>plugin</type>
-        <version>3.0.1</version>
+        <version>3.0.0</version>
         <folder>authentication</folder>
         <client>site</client>
         <infourl title="THM Homepage">https://www.thm.de/site</infourl>

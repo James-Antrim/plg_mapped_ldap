@@ -7,7 +7,7 @@
     <creationDate>June 2021</creationDate>
     <copyright>TH Mittelhessen 2020</copyright>
     <licence>GNU GPL v.3</licence>
-    <version>3.0.1</version>
+    <version>3.0.0</version>
     <description>MAPPED_LDAP_DESC</description>
     <files>
         <filename plugin="mapped_ldap">mapped_ldap.php</filename>
@@ -23,11 +23,11 @@
             <fieldset name="basic" addfieldpath="/plugins/authentication/mapped_ldap/Fields">
                 <field name="default" type="usersDefault" label="MAPPED_LDAP_USERS_DEFAULT"
                        description="MAPPED_LDAP_USERS_DEFAULT_DESC"/>
-                <!--<field name="handling" type="list" label="MAPPED_LDAP_HANDLING" description="MAPPED_LDAP_HANDLING_DESC"
-                       default="0">
-                    <option value="0">MAPPED_LDAP_HANDLING_SUPPLEMENT</option>
-                    <option value="1">MAPPED_LDAP_HANDLING_CORRECT</option>
-                </field>-->
+                <field name="override" type="override" label="MAPPED_LDAP_OVERRIDE"
+                       class="btn-group btn-group-yesno" default="0" filter="integer">
+                    <option value="0">JNO</option>
+                    <option value="1">JYES</option>
+                </field>
                 <field name="domain" type="text" label="MAPPED_LDAP_EMAIL_DOMAIN"
                        description="MAPPED_LDAP_EMAIL_DOMAIN_DESC" hint="thm.de" size="20"/>
                 <field name="rules" type="subform" label="MAPPED_LDAP_RULES" description="MAPPED_LDAP_RULES_DESC"

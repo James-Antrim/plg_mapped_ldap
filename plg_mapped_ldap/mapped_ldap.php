@@ -1,4 +1,5 @@
-<?php /** @noinspection PhpClassNamingConventionInspection */
+<?php
+/** @noinspection PhpClassNamingConventionInspection */
 /** @noinspection PhpDeprecationInspection */
 /**
  * @package     Mapped LDAP
@@ -21,14 +22,10 @@ use Joomla\Ldap\LdapClient as Client;
 
 /**
  * Mapped LDAP Authentication Plugin
- *
- * @todo add custom field with radio button and explanatory text to block authentication of new users not matching a rule
- * @todo make the subdomain resolution based on a comma seperated list
- * @todo add an update hook
  */
 class PlgAuthenticationMapped_LDAP extends JPlugin
 {
-	private const ADMINISTRATOR = 7, CORRECT = 1, DIRECT = 1, MANAGER = 6, SEARCH = 0, SUPERADMINISTRATOR = 8, SUPPLEMENT = 0;
+	private const DIRECT = 1, SEARCH = 0;
 
 	/**
 	 * Authenticates a user and maps it into specifically configured groups or the configured default group.
@@ -124,6 +121,7 @@ class PlgAuthenticationMapped_LDAP extends JPlugin
 
 		$client->close();
 
+		// Authentication was not successful.
 		if (!$success or empty($result))
 		{
 			$response->status        = Authentication::STATUS_FAILURE;
@@ -143,70 +141,71 @@ class PlgAuthenticationMapped_LDAP extends JPlugin
 			return;
 		}
 
-		$email = reset($result[$email]);
-		$name  = reset($result[$name]);
-
-		// Complete the actual authentication
-		$response->email         = $email;
-		$response->error_message = '';
-		$response->fullname      = $name;
-		$response->status        = Authentication::STATUS_SUCCESS;
-		$response->username      = $userName;
-
-		// No rules to apply => done
-		if (!$rules = $params->get('rules'))
-		{
-			return;
-		}
-
-		$domain     = (string) $params->get('domain');
-		$emails     = (string) $params->get('emails');
-		$emails     = empty($result[$emails]) ? [$email] : $result[$emails];
-		$handling   = (int) $params->get('handling', self::SUPPLEMENT);
-		$ldapGroups = (string) $params->get('ldap_groups');
-		$ldapGroups = empty($result[$ldapGroups]) ? [] : $result[$ldapGroups];
-		$user       = User::getInstance($userName);
+		$this->loadLanguage();
+		$email    = reset($result[$email]);
+		$name     = reset($result[$name]);
+		$override = (bool) $params->get('override');
+		$rules    = $params->get('rules');
+		$user     = User::getInstance($userName);
 
 		if (!$user->id)
 		{
+			// Override: no rules, no authentication for new users.
+			if ($override and !$rules)
+			{
+				$response->status        = Authentication::STATUS_FAILURE;
+				$response->error_message = $message ?: Text::_('MAPPED_LDAP_NO_RULES');
+
+				return;
+			}
+
 			$user->email    = $email;
 			$user->name     = $name;
 			$user->username = $userName;
 		}
+		// The user exists and there are no rules to assign them more groups.
+		elseif (!$rules)
+		{
+			$response->email         = $email;
+			$response->error_message = '';
+			$response->fullname      = $name;
+			$response->status        = Authentication::STATUS_SUCCESS;
+			$response->username      = $userName;
 
-		$existingGroupIDs  = $user->groups;
-		$groupIDs          = [];
-		$protectedGroupIDs = [self::ADMINISTRATOR, self::MANAGER, self::SUPERADMINISTRATOR];
+			return;
+		}
 
-		/**
-		 * Futureproof group id assignment.
-		 */
+		$domain             = (string) $params->get('domain');
+		$emails             = (string) $params->get('emails');
+		$emails             = empty($result[$emails]) ? [$email] : $result[$emails];
+		$assignedLDAPGroups = (string) $params->get('ldap_groups');
+		$assignedLDAPGroups = empty($result[$assignedLDAPGroups]) ? [] : $result[$assignedLDAPGroups];
+
+		$existingGroupIDs = $user->groups;
+		$groupIDs         = [];
+
+		// Futureproof group id assignment by ensuring that the id is always the same as the value.
 		foreach ($existingGroupIDs as $groupID)
 		{
-			if ($handling === self::CORRECT and !in_array($groupID, $protectedGroupIDs))
-			{
-				continue;
-			}
-
 			$groupIDs[$groupID] = $groupID;
 		}
 
 		foreach ($rules as $rule)
 		{
-			// Since the validation of plugin parameters is spotty, better to validate here.
+			// The rule does not contain a group assignment => invalid.
 			if (!$groupID = (int) $rule->groupID)
 			{
 				continue;
 			}
 
 			// Avoid running trim on individual array items
-			$groups     = str_replace(' ', '', $rule->ldap_group);
-			$groups     = explode(',', $groups);
+			$ruleGroups = str_replace(' ', '', $rule->ldap_group);
+			$ruleGroups = explode(',', $ruleGroups);
 			$subDomains = str_replace(' ', '', $rule->subdomain);
 			$subDomains = explode(',', $subDomains);
 
 			// The rule restricts groups and the person is either not assigned a group or not assigned a relevant group.
-			if ($groups and !$ldapGroups and !array_intersect($groups, $ldapGroups))
+			if ($ruleGroups and (!$assignedLDAPGroups or !array_intersect($ruleGroups, $assignedLDAPGroups)))
 			{
 				continue;
 			}
@@ -246,55 +245,83 @@ class PlgAuthenticationMapped_LDAP extends JPlugin
 			$groupIDs[$groupID] = $groupID;
 		}
 
-		if ($groupIDs)
+		if (!$groupIDs)
 		{
-			$new = false;
-
-			// Create a new user with the default group id
-			if (empty($user->id))
+			// Override Joomla's handling by not authenticating.
+			if ($override and !$user->id)
 			{
-				$defaultID = ComponentHelper::getParams('com_users')->get('new_usertype');
-				$new       = true;
+				$response->status        = Authentication::STATUS_FAILURE;
+				$response->error_message = Text::_('MAPPED_LDAP_NO_APPLICABLE_RULES');
 
-				$user->groups[$defaultID] = $defaultID;
-				$user->save();
-			}
-
-			// Joomla internal problems
-			if (empty($user->id))
-			{
 				return;
 			}
 
-			$dbo = Factory::getDbo();
+			// Let Joomla do its thing.
+			$response->email         = $email;
+			$response->error_message = '';
+			$response->fullname      = $name;
+			$response->status        = Authentication::STATUS_SUCCESS;
+			$response->username      = $userName;
 
-			foreach ($groupIDs as $groupID)
+			return;
+		}
+
+		$new = false;
+
+		// Create a new user with the default group id
+		if (empty($user->id))
+		{
+			$defaultID = ComponentHelper::getParams('com_users')->get('new_usertype');
+			$new       = true;
+
+			$user->groups[$defaultID] = $defaultID;
+			$user->save();
+		}
+
+		// Joomla internal problems
+		if (empty($user->id))
+		{
+			$response->status        = Authentication::STATUS_FAILURE;
+			$response->error_message = $message ?: Text::_('JERROR_AN_ERROR_HAS_OCCURRED');
+
+			return;
+		}
+
+		$dbo = Factory::getDbo();
+
+		foreach ($groupIDs as $groupID)
+		{
+			// Skip existing user -> user group assignments.
+			if (!$new)
 			{
-				if (!$new)
-				{
-					$query = $dbo->getQuery(true);
-					$query->select('*')->from('#__user_usergroup_map')->where("user_id = $user->id")->where("group_id = $groupID");
-					$dbo->setQuery($query);
-					$row = $dbo->loadAssoc();
-
-					if ($row)
-					{
-						continue;
-					}
-				}
-
 				$query = $dbo->getQuery(true);
-				$query->insert('#__user_usergroup_map')->columns('group_id, user_id')->values("$groupID, $user->id");
+				$query->select('*')->from('#__user_usergroup_map')->where("user_id = $user->id")->where("group_id = $groupID");
 				$dbo->setQuery($query);
-				$dbo->execute();
+				$row = $dbo->loadAssoc();
+
+				if ($row)
+				{
+					continue;
+				}
 			}
 
-			$groupIDs = implode(',', $groupIDs);
-			$query    = $dbo->getQuery(true);
-			$query->delete('#__user_usergroup_map')->where("user_id = $user->id")->where("group_id NOT IN ($groupIDs)");
+			$query = $dbo->getQuery(true);
+			$query->insert('#__user_usergroup_map')->columns('group_id, user_id')->values("$groupID, $user->id");
 			$dbo->setQuery($query);
 			$dbo->execute();
 		}
+
+		$groupIDs = implode(',', $groupIDs);
+		$query    = $dbo->getQuery(true);
+		$query->delete('#__user_usergroup_map')->where("user_id = $user->id")->where("group_id NOT IN ($groupIDs)");
+		$dbo->setQuery($query);
+		$dbo->execute();
+
+		$response->email         = $email;
+		$response->error_message = '';
+		$response->fullname      = $name;
+		$response->status        = Authentication::STATUS_SUCCESS;
+		$response->username      = $userName;
 	}
 
 	/**

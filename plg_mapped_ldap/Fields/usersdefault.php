@@ -20,13 +20,6 @@ use Joomla\CMS\Table\Usergroup;
 class JFormFieldUsersDefault extends FormField
 {
 	/**
-	 * The form field type.
-	 *
-	 * @var    string
-	 */
-	protected $type = 'UsersDefault';
-
-	/**
 	 * Method to get the field input markup.
 	 *
 	 * @return  string  The field input markup.
