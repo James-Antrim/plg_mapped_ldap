@@ -7,10 +7,11 @@
     <creationDate>June 2021</creationDate>
     <copyright>TH Mittelhessen 2020</copyright>
     <licence>GNU GPL v.3</licence>
-    <version>3.0.0</version>
+    <version>3.0.1</version>
     <description>MAPPED_LDAP_DESC</description>
     <files>
         <filename plugin="mapped_ldap">mapped_ldap.php</filename>
+        <folder>Fields</folder>
     </files>
     <languages>
         <language tag="de-DE">de-DE/de-DE.plg_authentication_mapped_ldap.ini</language>
