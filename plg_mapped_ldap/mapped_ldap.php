@@ -18,7 +18,8 @@ use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\User\User;
-use Joomla\Ldap\LdapClient as Client;
+use Joomla\CMS\User\UserHelper;
+use Joomla\Registry\Registry;
 
 /**
  * Mapped LDAP Authentication Plugin
@@ -26,6 +27,130 @@ use Joomla\Ldap\LdapClient as Client;
 class PlgAuthenticationMapped_LDAP extends JPlugin
 {
 	private const DIRECT = 1, SEARCH = 0;
+
+	public string $accountName;
+
+	private string $accountPassword = '';
+
+	public bool $allowReferrals = true;
+
+	private bool $bound = false;
+
+	private string $domain = '';
+
+	private string $directoryDomains = '';
+
+	public string $host = '';
+
+	private int $method = 0;
+
+	private int $port = 0;
+
+	/**
+	 * LDAP Resource Identifier
+	 *
+	 * @var    resource|null
+	 * @since  1.0
+	 */
+	private $resource = null;
+
+	private string $serverDomains = '';
+
+	/**
+	 * Destructor.
+	 */
+	public function __destruct()
+	{
+		$this->unbind();
+	}
+
+	/**
+	 * Binds to the LDAP directory
+	 *
+	 * @param   string  $username  The username
+	 * @param   string  $password  The password
+	 * @param   string  $nosub     ...
+	 *
+	 * @return  boolean
+	 *
+	 * @since   1.0
+	 */
+	public function bind(AuthenticationResponse $response, string $username = '', string $password = '', int $nosub = 0): bool
+	{
+		if (!$this->resource)
+		{
+			if (!$this->connect($response))
+			{
+				return false;
+			}
+		}
+
+		$username = $username ?: $this->accountName;
+		$password = $password ?: $this->accountPassword;
+
+		if (!$this->users_dn or $useUsername)
+		{
+			$this->domain = $username;
+		}
+		elseif (strlen($username))
+		{
+			$this->domain = str_replace('[username]', $username, $this->users_dn);
+		}
+		else
+		{
+			$this->domain = '';
+		}
+
+		$this->bound = ldap_bind($this->resource, $this->domain, $password);
+
+		return $this->bound;
+	}
+
+	/**
+	 * Connect to an LDAP server
+	 *
+	 * @return  boolean
+	 *
+	 * @since   1.0
+	 */
+	private function connect(AuthenticationResponse $response): bool
+	{
+		if (!$this->resource = ldap_connect($this->host, $this->port))
+		{
+			$response->status        = Authentication::STATUS_FAILURE;
+			$response->error_message = Text::_('MAPPED_LDAP_CONNECTION_FAILEDxxx');
+
+			return false;
+		}
+
+		// Other versions no longer supported => parameter check removed
+		if (!ldap_set_option($this->resource, LDAP_OPT_PROTOCOL_VERSION, 3))
+		{
+			$response->status        = Authentication::STATUS_FAILURE;
+			$response->error_message = Text::_('MAPPED_LDAP_OPT_PROTOCOL_VERSION_FAILEDxxx');
+
+			return false;
+		}
+
+		if (!ldap_set_option($this->resource, LDAP_OPT_REFERRALS, $this->allowReferrals))
+		{
+			$response->status        = Authentication::STATUS_FAILURE;
+			$response->error_message = Text::_('MAPPED_LDAP_OPT_REFERRALS_FAILEDxxx');
+
+			return false;
+		}
+
+		// Apparently insecure without TLS => parameter check removed
+		if (!ldap_start_tls($this->resource))
+		{
+			$response->status        = Authentication::STATUS_FAILURE;
+			$response->error_message = Text::_('MAPPED_LDAP_TLS_NEGOTIATION_FAILEDxxx');
+
+			return false;
+		}
+
+		return true;
+	}
 
 	/**
 	 * Authenticates a user and maps it into specifically configured groups or the configured default group.
@@ -41,32 +166,34 @@ class PlgAuthenticationMapped_LDAP extends JPlugin
 	public function onUserAuthenticate(array $credentials, array $options, AuthenticationResponse $response)
 	{
 		$response->type = 'LDAP';
+		$this->loadLanguage();
 
-		// Strip null bytes from the password
-		$credentials['password'] = str_replace(chr(0), '', $credentials['password']);
+		/**
+		 * Removed params:
+		 * ignore_reqcert_tls   wasn't used to begin with
+		 * ldap_debug           wasn't used to begin with
+		 * negotiate_tls        always true, completely removed
+		 * use_ldapV3           always true, completely removed
+		 */
 
-		if (empty($credentials['password']))
+		if (!$this->validateConfiguration($response))
 		{
-			$response->status        = Authentication::STATUS_FAILURE;
-			$response->error_message = Text::_('JGLOBAL_AUTH_EMPTY_PASS_NOT_ALLOWED');
-
+			// Messaging performed on the AuthenticationResponse object.
 			return;
 		}
 
-		$method = (int) $this->params->get('method');
-		$params = $this->params;
-
-		// This is no longer optional.
-		$params->set('use_ldapV3', 1);
-
-		// Properties not explicitly mentioned are bound implicitly in the client constructor
-		$client = new Client($params);
-
-		if (!$client->connect())
+		if (!$this->validateCredentials($credentials, $response))
 		{
-			$response->status        = Authentication::STATUS_FAILURE;
-			$response->error_message = Text::_('JGLOBAL_AUTH_NOT_CONNECT');
+			// Messaging performed on the AuthenticationResponse object.
+			return;
+		}
 
+		/** @var Registry $params */
+		$params = $this->params;
+		$method = $this->method;
+
+		if (!$this->connect($response))
+		{
 			return;
 		}
 
@@ -75,7 +202,7 @@ class PlgAuthenticationMapped_LDAP extends JPlugin
 		$result   = [];
 		$search   = str_replace(
 			'[search]',
-			str_replace(';', '\3b', $client->escape($userName, null, LDAP_ESCAPE_FILTER)),
+			str_replace(';', '\3b', ldap_escape($userName, null, LDAP_ESCAPE_FILTER)),
 			$params->get('search')
 		);
 		$success  = false;
@@ -85,14 +212,14 @@ class PlgAuthenticationMapped_LDAP extends JPlugin
 			case self::SEARCH:
 
 				// Without altering the client, this parameter cannot be change to be more appropriate.
-				$adminName = $params->get('username', '');
-				$binds     = $adminName ? $client->bind() : $client->anonymous_bind();
+				$bound = $this->bind($response);
 
-				if ($binds)
+				if ($bound)
 				{
 					$result = $this->search($client, $search);
 
-					if (empty($result) or empty($result['dn']) or !$success = $client->bind($result['dn'], $credentials['password'], 1))
+					if (empty($result) or empty($result['dn']) or !$success = $client->bind($result['dn'],
+							$credentials['password'], 1))
 					{
 						$message = Text::_('JGLOBAL_AUTH_NO_USER');
 					}
@@ -107,7 +234,7 @@ class PlgAuthenticationMapped_LDAP extends JPlugin
 			case self::DIRECT:
 
 				// We just accept the result here
-				if ($success = $client->bind($client->escape($userName, null, LDAP_ESCAPE_DN), $credentials['password']))
+				if ($success = $this->bind($response, ldap_escape($userName, null, LDAP_ESCAPE_DN), $credentials['password']))
 				{
 					$result = $this->search($client, $search);
 				}
@@ -119,7 +246,7 @@ class PlgAuthenticationMapped_LDAP extends JPlugin
 				break;
 		}
 
-		$client->close();
+		$this->unbind();
 
 		// Authentication was not successful.
 		if (!$success or empty($result))
@@ -141,7 +268,6 @@ class PlgAuthenticationMapped_LDAP extends JPlugin
 			return;
 		}
 
-		$this->loadLanguage();
 		$email    = reset($result[$email]);
 		$name     = reset($result[$name]);
 		$override = (bool) $params->get('override');
@@ -328,8 +454,8 @@ class PlgAuthenticationMapped_LDAP extends JPlugin
 	 * Builds a search string based on semicolon separated items. Calls the client search function. Returns the first
 	 * result.
 	 *
-	 * @param   Client  $client  the LDAP client
-	 * @param   string  $search  search string of search values
+	 * @param   LDAPClient  $client  the LDAP client
+	 * @param   string      $search  search string of search values
 	 *
 	 * @return  array  Search result (singular)
 	 */
@@ -345,5 +471,218 @@ class PlgAuthenticationMapped_LDAP extends JPlugin
 		$results = $client->search($results);
 
 		return reset($results) ?: [];
+	}
+
+	/**
+	 * Perform an LDAP search
+	 *
+	 * @param   array   $filters     Search Filters (array of strings)
+	 * @param   string  $dnoverride  DN Override
+	 * @param   array   $attributes  An array of attributes to return (if empty, all fields are returned).
+	 *
+	 * @return  array  Multidimensional array of results
+	 */
+	public function searchToo(array $filters, $dnoverride = null, array $attributes = [])
+	{
+		$result = [];
+
+		if (!$this->bound || !$this->resource)
+		{
+			return $result;
+		}
+
+		if ($dnoverride)
+		{
+			$dn = $dnoverride;
+		}
+		else
+		{
+			$dn = $this->baseDomains;
+		}
+
+		foreach ($filters as $searchFilter)
+		{
+			$searchResult = ldap_search($this->resource, $dn, $searchFilter, $attributes);
+
+			if ($searchResult && ($count = ldap_count_entries($this->resource, $searchResult)) > 0)
+			{
+				for ($i = 0; $i < $count; $i++)
+				{
+					$result[$i] = [];
+
+					if (!$i)
+					{
+						$firstentry = ldap_first_entry($this->resource, $searchResult);
+					}
+					else
+					{
+						$firstentry = ldap_next_entry($this->resource, $firstentry);
+					}
+
+					// Load user-specified attributes
+					$attributeResult = ldap_get_attributes($this->resource, $firstentry);
+
+					// LDAP returns an array of arrays, fit this into attributes result array
+					foreach ($attributeResult as $ki => $ai)
+					{
+						if (is_array($ai))
+						{
+							$subcount        = $ai['count'];
+							$result[$i][$ki] = [];
+
+							for ($k = 0; $k < $subcount; $k++)
+							{
+								$result[$i][$ki][$k] = $ai[$k];
+							}
+						}
+					}
+
+					$result[$i]['dn'] = ldap_get_dn($this->resource, $firstentry);
+				}
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Unbinds from the LDAP directory
+	 *
+	 * @return  bool
+	 */
+	public function unbind(): bool
+	{
+		if ($this->resource)
+		{
+			$unbound        = ldap_unbind($this->resource);
+			$this->resource = null;
+
+			return $unbound;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Validates the plugin configuration.
+	 *
+	 * @param   AuthenticationResponse  $response
+	 *
+	 * @return bool
+	 */
+	private function validateConfiguration(AuthenticationResponse $response): bool
+	{
+		/** @var Registry $parameters */
+		$parameters = $this->params;
+
+		if (!$this->accountName = (string) $parameters->get('username'))
+		{
+			$response->status        = Authentication::STATUS_FAILURE;
+			$response->error_message = Text::_('MAPPED_LDAP_USERNAME_MISSINGxxx');
+
+			return false;
+		}
+
+		if (!$this->accountPassword = (string) $parameters->get('password'))
+		{
+			$response->status        = Authentication::STATUS_FAILURE;
+			$response->error_message = Text::_('MAPPED_LDAP_PASSWORD_MISSINGxxx');
+
+			return false;
+		}
+
+		$this->allowReferrals = !((int) $parameters->get('no_referrals') === 0);
+
+		if (!$this->host = (string) $parameters->get('host'))
+		{
+			$response->status        = Authentication::STATUS_FAILURE;
+			$response->error_message = Text::_('MAPPED_LDAP_HOST_MISSINGxxx');
+
+			return false;
+		}
+
+		$this->method = (int) $parameters->get('method') === 1 ? 1 : 0;
+
+		if (!$this->port = (int) $parameters->get('port'))
+		{
+			$response->status        = Authentication::STATUS_FAILURE;
+			$response->error_message = Text::_('MAPPED_LDAP_PORT_MISSINGxxx');
+
+			return false;
+		}
+
+		$pattern = '/^([\w\d\-]+=[\w\d\-]+,)*[\w\d\-]+=[\w\d\-]+$/';
+		if (!$this->serverDomains = (string) $parameters->get('base_dn'))
+		{
+			$response->status        = Authentication::STATUS_FAILURE;
+			$response->error_message = Text::_('MAPPED_LDAP_BASE_DOMAINS_MISSINGxxx');
+
+			return false;
+		}
+		elseif (preg_match($pattern, $this->serverDomains) !== 1)
+		{
+			$response->status        = Authentication::STATUS_FAILURE;
+			$response->error_message = Text::_('MAPPED_LDAP_BASE_DOMAINS_INVALIDxxx');
+
+			return false;
+		}
+
+		$pattern = '/^([\w\d\-]+=[\w\d\-]+,)*[\w\d\-]+=[\w\d\-]+(;[\w\d\-]+=[\w\d\-]+(,[\w\d\-]+=[\w\d\-]+)*)?$/';
+		if (!$this->directoryDomains = $parameters->get('users_dn'))
+		{
+			$response->status        = Authentication::STATUS_FAILURE;
+			$response->error_message = Text::_('MAPPED_LDAP_USER_DOMAINS_MISSINGxxx');
+
+			return false;
+		}
+		elseif (preg_match($pattern, $this->directoryDomains) !== 1)
+		{
+			$response->status        = Authentication::STATUS_FAILURE;
+			$response->error_message = Text::_('MAPPED_LDAP_USER_DOMAINS_INVALIDxxx');
+
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Validates the given credentials for plausibility. Actual validation is of course performed on the LDAP server. ;)
+	 *
+	 * @param   array                   $credentials
+	 * @param   AuthenticationResponse  $response
+	 *
+	 * @return bool
+	 */
+	private function validateCredentials(array &$credentials, AuthenticationResponse $response): bool
+	{
+		// Strip null bytes from the password
+		$credentials['password'] = str_replace(chr(0), '', $credentials['password']);
+
+		if (empty($credentials['password']))
+		{
+			$response->status        = Authentication::STATUS_FAILURE;
+			$response->error_message = Text::_('MAPPED_LDAP_EMPTY_PASSWORDxxx');
+
+			return false;
+		}
+
+		$userParams = ComponentHelper::getParams('com_users');
+
+		// If the site configuration does not allow for user registration check for a matching username.
+		if ($userParams->get('allowUserRegistration'))
+		{
+			return true;
+		}
+
+		if (UserHelper::getUserId($credentials['username']))
+		{
+			return true;
+		}
+
+		$response->status        = Authentication::STATUS_FAILURE;
+		$response->error_message = Text::_('MAPPED_LDAP_USER_NOT_REGISTEREDxxx');
+
+		return false;
 	}
 }

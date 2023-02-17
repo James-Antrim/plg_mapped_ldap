@@ -48,18 +48,6 @@
                 <field name="host" type="text" label="MAPPED_LDAP_HOST" description="MAPPED_LDAP_HOST_DESC" size="20"/>
                 <field name="port" type="number" label="MAPPED_LDAP_PORT" description="MAPPED_LDAP_PORT_DESC"
                        default="389" filter="integer" hint="389" min="1" max="65535" size="5" validate="number"/>
-                <field name="negotiate_tls" type="radio" label="MAPPED_LDAP_NEGOTIATE"
-                       description="MAPPED_LDAP_NEGOTIATE_DESC"
-                       class="btn-group btn-group-yesno" default="1" filter="integer">
-                    <option value="1">JYES</option>
-                    <option value="0">JNO</option>
-                </field>
-                <field name="ignore_reqcert_tls" type="radio" label="MAPPED_LDAP_IGNORE_CERTIFICATE"
-                       description="MAPPED_LDAP_IGNORE_CERTIFICATE_DESC"
-                       class="btn-group btn-group-yesno" default="0" filter="integer">
-                    <option value="1">JYES</option>
-                    <option value="0">JNO</option>
-                </field>
                 <field name="no_referrals" type="radio" label="MAPPED_LDAP_ALLOW_REFERRALS"
                        description="MAPPED_LDAP_ALLOW_REFERRALS_DESC"
                        class="btn-group btn-group-yesno" default="1" filter="integer">
@@ -70,11 +58,6 @@
                        description="MAPPED_LDAP_ADMIN_USERNAME_DESC" size="20"/>
                 <field name="password" type="password" label="MAPPED_LDAP_ADMIN_PASSWORD"
                        description="MAPPED_LDAP_ADMIN_PASSWORD_DESC" size="20"/>
-                <field name="ldap_debug" type="radio" label="MAPPED_LDAP_DEBUG" description="MAPPED_LDAP_DEBUG_DESC"
-                       class="btn-group btn-group-yesno" default="0" filter="integer">
-                    <option value="1">JYES</option>
-                    <option value="0">JNO</option>
-                </field>
             </fieldset>
             <fieldset name="search" label="MAPPED_LDAP_SEARCH">
                 <field name="method" type="list" label="MAPPED_LDAP_METHOD" description="MAPPED_LDAP_METHOD_DESC">
