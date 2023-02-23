@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<extension version="3.0" type="plugin" group="authentication" method="upgrade">
+<extension  type="plugin" group="authentication" method="upgrade">
     <name>plg_mapped_ldap</name>
     <author>James Antrim</author>
     <authorEmail>james.antrim@nm.thm.de</authorEmail>
@@ -7,7 +7,7 @@
     <creationDate>June 2021</creationDate>
     <copyright>TH Mittelhessen 2020</copyright>
     <licence>GNU GPL v.3</licence>
-    <version>3.0.1</version>
+    <version>4.0.1</version>
     <description>MAPPED_LDAP_DESC</description>
     <files>
         <filename plugin="mapped_ldap">mapped_ldap.php</filename>

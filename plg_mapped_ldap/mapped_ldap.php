@@ -1,6 +1,5 @@
 <?php
 /** @noinspection PhpClassNamingConventionInspection */
-/** @noinspection PhpDeprecationInspection */
 /**
  * @package     Mapped LDAP
  * @extension   plg_mapped_ldap
@@ -15,674 +14,802 @@ defined('_JEXEC') or die;
 use Joomla\CMS\Authentication\Authentication;
 use Joomla\CMS\Authentication\AuthenticationResponse;
 use Joomla\CMS\Component\ComponentHelper;
-use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\Plugin\CMSPlugin;
 use Joomla\CMS\User\User;
 use Joomla\CMS\User\UserHelper;
+use Joomla\Database\DatabaseDriver;
 use Joomla\Registry\Registry;
 
 /**
  * Mapped LDAP Authentication Plugin
  */
-class PlgAuthenticationMapped_LDAP extends JPlugin
+class PlgAuthenticationMapped_LDAP extends CMSPlugin
 {
-	private const DIRECT = 1, SEARCH = 0;
-
-	public string $accountName;
-
-	private string $accountPassword = '';
-
-	public bool $allowReferrals = true;
-
-	private bool $bound = false;
-
-	private string $domain = '';
-
-	private string $directoryDomains = '';
-
-	public string $host = '';
-
-	private int $method = 0;
-
-	private int $port = 0;
-
-	/**
-	 * LDAP Resource Identifier
-	 *
-	 * @var    resource|null
-	 * @since  1.0
-	 */
-	private $resource = null;
-
-	private string $serverDomains = '';
-
-	/**
-	 * Destructor.
-	 */
-	public function __destruct()
-	{
-		$this->unbind();
-	}
-
-	/**
-	 * Binds to the LDAP directory
-	 *
-	 * @param   string  $username  The username
-	 * @param   string  $password  The password
-	 * @param   string  $nosub     ...
-	 *
-	 * @return  boolean
-	 *
-	 * @since   1.0
-	 */
-	public function bind(AuthenticationResponse $response, string $username = '', string $password = '', int $nosub = 0): bool
-	{
-		if (!$this->resource)
-		{
-			if (!$this->connect($response))
-			{
-				return false;
-			}
-		}
-
-		$username = $username ?: $this->accountName;
-		$password = $password ?: $this->accountPassword;
-
-		if (!$this->users_dn or $useUsername)
-		{
-			$this->domain = $username;
-		}
-		elseif (strlen($username))
-		{
-			$this->domain = str_replace('[username]', $username, $this->users_dn);
-		}
-		else
-		{
-			$this->domain = '';
-		}
-
-		$this->bound = ldap_bind($this->resource, $this->domain, $password);
-
-		return $this->bound;
-	}
-
-	/**
-	 * Connect to an LDAP server
-	 *
-	 * @return  boolean
-	 *
-	 * @since   1.0
-	 */
-	private function connect(AuthenticationResponse $response): bool
-	{
-		if (!$this->resource = ldap_connect($this->host, $this->port))
-		{
-			$response->status        = Authentication::STATUS_FAILURE;
-			$response->error_message = Text::_('MAPPED_LDAP_CONNECTION_FAILEDxxx');
-
-			return false;
-		}
-
-		// Other versions no longer supported => parameter check removed
-		if (!ldap_set_option($this->resource, LDAP_OPT_PROTOCOL_VERSION, 3))
-		{
-			$response->status        = Authentication::STATUS_FAILURE;
-			$response->error_message = Text::_('MAPPED_LDAP_OPT_PROTOCOL_VERSION_FAILEDxxx');
-
-			return false;
-		}
-
-		if (!ldap_set_option($this->resource, LDAP_OPT_REFERRALS, $this->allowReferrals))
-		{
-			$response->status        = Authentication::STATUS_FAILURE;
-			$response->error_message = Text::_('MAPPED_LDAP_OPT_REFERRALS_FAILEDxxx');
-
-			return false;
-		}
-
-		// Apparently insecure without TLS => parameter check removed
-		if (!ldap_start_tls($this->resource))
-		{
-			$response->status        = Authentication::STATUS_FAILURE;
-			$response->error_message = Text::_('MAPPED_LDAP_TLS_NEGOTIATION_FAILEDxxx');
-
-			return false;
-		}
-
-		return true;
-	}
-
-	/**
-	 * Authenticates a user and maps it into specifically configured groups or the configured default group.
-	 *
-	 * @param   array                   $credentials  Array holding the user credentials
-	 * @param   array                   $options      Array of extra options
-	 * @param   AuthenticationResponse  $response     AuthenticationResponse object
-	 *
-	 * @return  void success is stored in the response->status
-	 * @noinspection PhpUnusedParameterInspection
-	 * @throws Exception
-	 */
-	public function onUserAuthenticate(array $credentials, array $options, AuthenticationResponse $response)
-	{
-		$response->type = 'LDAP';
-		$this->loadLanguage();
-
-		/**
-		 * Removed params:
-		 * ignore_reqcert_tls   wasn't used to begin with
-		 * ldap_debug           wasn't used to begin with
-		 * negotiate_tls        always true, completely removed
-		 * use_ldapV3           always true, completely removed
-		 */
-
-		if (!$this->validateConfiguration($response))
-		{
-			// Messaging performed on the AuthenticationResponse object.
-			return;
-		}
-
-		if (!$this->validateCredentials($credentials, $response))
-		{
-			// Messaging performed on the AuthenticationResponse object.
-			return;
-		}
-
-		/** @var Registry $params */
-		$params = $this->params;
-		$method = $this->method;
-
-		if (!$this->connect($response))
-		{
-			return;
-		}
-
-		$message  = '';
-		$userName = $credentials['username'];
-		$result   = [];
-		$search   = str_replace(
-			'[search]',
-			str_replace(';', '\3b', ldap_escape($userName, null, LDAP_ESCAPE_FILTER)),
-			$params->get('search')
-		);
-		$success  = false;
-
-		switch ($method)
-		{
-			case self::SEARCH:
-
-				// Without altering the client, this parameter cannot be change to be more appropriate.
-				$bound = $this->bind($response);
-
-				if ($bound)
-				{
-					$result = $this->search($client, $search);
-
-					if (empty($result) or empty($result['dn']) or !$success = $client->bind($result['dn'],
-							$credentials['password'], 1))
-					{
-						$message = Text::_('JGLOBAL_AUTH_NO_USER');
-					}
-				}
-				else
-				{
-					$message = Text::_('JGLOBAL_AUTH_NOT_CONNECT');
-				}
-
-				break;
-
-			case self::DIRECT:
-
-				// We just accept the result here
-				if ($success = $this->bind($response, ldap_escape($userName, null, LDAP_ESCAPE_DN), $credentials['password']))
-				{
-					$result = $this->search($client, $search);
-				}
-				else
-				{
-					$message = Text::_('JGLOBAL_AUTH_INVALID_PASS');
-				}
-
-				break;
-		}
-
-		$this->unbind();
-
-		// Authentication was not successful.
-		if (!$success or empty($result))
-		{
-			$response->status        = Authentication::STATUS_FAILURE;
-			$response->error_message = $message ?: Text::_('JGLOBAL_AUTH_INVALID_PASS');
-
-			return;
-		}
-
-		$email = (string) $params->get('email');
-		$name  = (string) $params->get('name');
-
-		if (empty($result[$email]) or empty($result[$name]))
-		{
-			$response->status        = Authentication::STATUS_FAILURE;
-			$response->error_message = Text::_('JGLOBAL_AUTH_USER_NOT_FOUND');
-
-			return;
-		}
-
-		$email    = reset($result[$email]);
-		$name     = reset($result[$name]);
-		$override = (bool) $params->get('override');
-		$rules    = $params->get('rules');
-		$user     = User::getInstance($userName);
-
-		if (!$user->id)
-		{
-			// Override: no rules, no authentication for new users.
-			if ($override and !$rules)
-			{
-				$response->status        = Authentication::STATUS_FAILURE;
-				$response->error_message = $message ?: Text::_('MAPPED_LDAP_NO_RULES');
-
-				return;
-			}
-
-			$user->email    = $email;
-			$user->name     = $name;
-			$user->username = $userName;
-		}
-		// The user exists and there are no rules to assign them more groups.
-		elseif (!$rules)
-		{
-			$response->email         = $email;
-			$response->error_message = '';
-			$response->fullname      = $name;
-			$response->status        = Authentication::STATUS_SUCCESS;
-			$response->username      = $userName;
-
-			return;
-		}
-
-		$domain             = (string) $params->get('domain');
-		$emails             = (string) $params->get('emails');
-		$emails             = empty($result[$emails]) ? [$email] : $result[$emails];
-		$assignedLDAPGroups = (string) $params->get('ldap_groups');
-		$assignedLDAPGroups = empty($result[$assignedLDAPGroups]) ? [] : $result[$assignedLDAPGroups];
-
-		$existingGroupIDs = $user->groups;
-		$groupIDs         = [];
-
-		// Futureproof group id assignment by ensuring that the id is always the same as the value.
-		foreach ($existingGroupIDs as $groupID)
-		{
-			$groupIDs[$groupID] = $groupID;
-		}
-
-		foreach ($rules as $rule)
-		{
-			// The rule does not contain a group assignment => invalid.
-			if (!$groupID = (int) $rule->groupID)
-			{
-				continue;
-			}
-
-			// Avoid running trim on individual array items
-			$ruleGroups = str_replace(' ', '', $rule->ldap_group);
-			$ruleGroups = explode(',', $ruleGroups);
-			$subDomains = str_replace(' ', '', $rule->subdomain);
-			$subDomains = explode(',', $subDomains);
-
-			// The rule restricts groups and the person is either not assigned a group or not assigned a relevant group.
-			if ($ruleGroups and (!$assignedLDAPGroups or !array_intersect($ruleGroups, $assignedLDAPGroups)))
-			{
-				continue;
-			}
-
-			// Check for subdomain relevance
-			if ($subDomains)
-			{
-				$relevant = false;
-
-				foreach ($subDomains as $subDomain)
-				{
-					// Email was already assigned => variable name safe.
-					foreach ($emails as $email)
-					{
-						$pieces = explode('@', $email);
-
-						// Invalid or irrelevant
-						if (!$emailDomain = array_pop($pieces) or strpos($emailDomain, ".$domain") === false)
-						{
-							continue;
-						}
-
-						if (str_replace(".$domain", '', $emailDomain) === $subDomain)
-						{
-							$relevant = true;
-							break 2;
-						}
-					}
-				}
-
-				if (!$relevant)
-				{
-					continue;
-				}
-			}
-
-			$groupIDs[$groupID] = $groupID;
-		}
-
-		if (!$groupIDs)
-		{
-			// Override Joomla's handling by not authenticating.
-			if ($override and !$user->id)
-			{
-				$response->status        = Authentication::STATUS_FAILURE;
-				$response->error_message = Text::_('MAPPED_LDAP_NO_APPLICABLE_RULES');
-
-				return;
-			}
-
-			// Let Joomla do its thing.
-			$response->email         = $email;
-			$response->error_message = '';
-			$response->fullname      = $name;
-			$response->status        = Authentication::STATUS_SUCCESS;
-			$response->username      = $userName;
-
-			return;
-		}
-
-		$new = false;
-
-		// Create a new user with the default group id
-		if (empty($user->id))
-		{
-			$defaultID = ComponentHelper::getParams('com_users')->get('new_usertype');
-			$new       = true;
-
-			$user->groups[$defaultID] = $defaultID;
-			$user->save();
-		}
-
-		// Joomla internal problems
-		if (empty($user->id))
-		{
-			$response->status        = Authentication::STATUS_FAILURE;
-			$response->error_message = $message ?: Text::_('JERROR_AN_ERROR_HAS_OCCURRED');
-
-			return;
-		}
-
-		$dbo = Factory::getDbo();
-
-		foreach ($groupIDs as $groupID)
-		{
-			// Skip existing user -> user group assignments.
-			if (!$new)
-			{
-				$query = $dbo->getQuery(true);
-				$query->select('*')->from('#__user_usergroup_map')->where("user_id = $user->id")->where("group_id = $groupID");
-				$dbo->setQuery($query);
-				$row = $dbo->loadAssoc();
-
-				if ($row)
-				{
-					continue;
-				}
-			}
-
-			$query = $dbo->getQuery(true);
-			$query->insert('#__user_usergroup_map')->columns('group_id, user_id')->values("$groupID, $user->id");
-			$dbo->setQuery($query);
-			$dbo->execute();
-		}
-
-		$groupIDs = implode(',', $groupIDs);
-		$query    = $dbo->getQuery(true);
-		$query->delete('#__user_usergroup_map')->where("user_id = $user->id")->where("group_id NOT IN ($groupIDs)");
-		$dbo->setQuery($query);
-		$dbo->execute();
-
-		$response->email         = $email;
-		$response->error_message = '';
-		$response->fullname      = $name;
-		$response->status        = Authentication::STATUS_SUCCESS;
-		$response->username      = $userName;
-	}
-
-	/**
-	 * Builds a search string based on semicolon separated items. Calls the client search function. Returns the first
-	 * result.
-	 *
-	 * @param   LDAPClient  $client  the LDAP client
-	 * @param   string      $search  search string of search values
-	 *
-	 * @return  array  Search result (singular)
-	 */
-	private function search(Client $client, string $search): array
-	{
-		$results = explode(';', $search);
-
-		foreach ($results as $key => $result)
-		{
-			$results[$key] = '(' . str_replace('\3b', ';', $result) . ')';
-		}
-
-		$results = $client->search($results);
-
-		return reset($results) ?: [];
-	}
-
-	/**
-	 * Perform an LDAP search
-	 *
-	 * @param   array   $filters     Search Filters (array of strings)
-	 * @param   string  $dnoverride  DN Override
-	 * @param   array   $attributes  An array of attributes to return (if empty, all fields are returned).
-	 *
-	 * @return  array  Multidimensional array of results
-	 */
-	public function searchToo(array $filters, $dnoverride = null, array $attributes = [])
-	{
-		$result = [];
-
-		if (!$this->bound || !$this->resource)
-		{
-			return $result;
-		}
-
-		if ($dnoverride)
-		{
-			$dn = $dnoverride;
-		}
-		else
-		{
-			$dn = $this->baseDomains;
-		}
-
-		foreach ($filters as $searchFilter)
-		{
-			$searchResult = ldap_search($this->resource, $dn, $searchFilter, $attributes);
-
-			if ($searchResult && ($count = ldap_count_entries($this->resource, $searchResult)) > 0)
-			{
-				for ($i = 0; $i < $count; $i++)
-				{
-					$result[$i] = [];
-
-					if (!$i)
-					{
-						$firstentry = ldap_first_entry($this->resource, $searchResult);
-					}
-					else
-					{
-						$firstentry = ldap_next_entry($this->resource, $firstentry);
-					}
-
-					// Load user-specified attributes
-					$attributeResult = ldap_get_attributes($this->resource, $firstentry);
-
-					// LDAP returns an array of arrays, fit this into attributes result array
-					foreach ($attributeResult as $ki => $ai)
-					{
-						if (is_array($ai))
-						{
-							$subcount        = $ai['count'];
-							$result[$i][$ki] = [];
-
-							for ($k = 0; $k < $subcount; $k++)
-							{
-								$result[$i][$ki][$k] = $ai[$k];
-							}
-						}
-					}
-
-					$result[$i]['dn'] = ldap_get_dn($this->resource, $firstentry);
-				}
-			}
-		}
-
-		return $result;
-	}
-
-	/**
-	 * Unbinds from the LDAP directory
-	 *
-	 * @return  bool
-	 */
-	public function unbind(): bool
-	{
-		if ($this->resource)
-		{
-			$unbound        = ldap_unbind($this->resource);
-			$this->resource = null;
-
-			return $unbound;
-		}
-
-		return true;
-	}
-
-	/**
-	 * Validates the plugin configuration.
-	 *
-	 * @param   AuthenticationResponse  $response
-	 *
-	 * @return bool
-	 */
-	private function validateConfiguration(AuthenticationResponse $response): bool
-	{
-		/** @var Registry $parameters */
-		$parameters = $this->params;
-
-		if (!$this->accountName = (string) $parameters->get('username'))
-		{
-			$response->status        = Authentication::STATUS_FAILURE;
-			$response->error_message = Text::_('MAPPED_LDAP_USERNAME_MISSINGxxx');
-
-			return false;
-		}
-
-		if (!$this->accountPassword = (string) $parameters->get('password'))
-		{
-			$response->status        = Authentication::STATUS_FAILURE;
-			$response->error_message = Text::_('MAPPED_LDAP_PASSWORD_MISSINGxxx');
-
-			return false;
-		}
-
-		$this->allowReferrals = !((int) $parameters->get('no_referrals') === 0);
-
-		if (!$this->host = (string) $parameters->get('host'))
-		{
-			$response->status        = Authentication::STATUS_FAILURE;
-			$response->error_message = Text::_('MAPPED_LDAP_HOST_MISSINGxxx');
-
-			return false;
-		}
-
-		$this->method = (int) $parameters->get('method') === 1 ? 1 : 0;
-
-		if (!$this->port = (int) $parameters->get('port'))
-		{
-			$response->status        = Authentication::STATUS_FAILURE;
-			$response->error_message = Text::_('MAPPED_LDAP_PORT_MISSINGxxx');
-
-			return false;
-		}
-
-		$pattern = '/^([\w\d\-]+=[\w\d\-]+,)*[\w\d\-]+=[\w\d\-]+$/';
-		if (!$this->serverDomains = (string) $parameters->get('base_dn'))
-		{
-			$response->status        = Authentication::STATUS_FAILURE;
-			$response->error_message = Text::_('MAPPED_LDAP_BASE_DOMAINS_MISSINGxxx');
-
-			return false;
-		}
-		elseif (preg_match($pattern, $this->serverDomains) !== 1)
-		{
-			$response->status        = Authentication::STATUS_FAILURE;
-			$response->error_message = Text::_('MAPPED_LDAP_BASE_DOMAINS_INVALIDxxx');
-
-			return false;
-		}
-
-		$pattern = '/^([\w\d\-]+=[\w\d\-]+,)*[\w\d\-]+=[\w\d\-]+(;[\w\d\-]+=[\w\d\-]+(,[\w\d\-]+=[\w\d\-]+)*)?$/';
-		if (!$this->directoryDomains = $parameters->get('users_dn'))
-		{
-			$response->status        = Authentication::STATUS_FAILURE;
-			$response->error_message = Text::_('MAPPED_LDAP_USER_DOMAINS_MISSINGxxx');
-
-			return false;
-		}
-		elseif (preg_match($pattern, $this->directoryDomains) !== 1)
-		{
-			$response->status        = Authentication::STATUS_FAILURE;
-			$response->error_message = Text::_('MAPPED_LDAP_USER_DOMAINS_INVALIDxxx');
-
-			return false;
-		}
-
-		return true;
-	}
-
-	/**
-	 * Validates the given credentials for plausibility. Actual validation is of course performed on the LDAP server. ;)
-	 *
-	 * @param   array                   $credentials
-	 * @param   AuthenticationResponse  $response
-	 *
-	 * @return bool
-	 */
-	private function validateCredentials(array &$credentials, AuthenticationResponse $response): bool
-	{
-		// Strip null bytes from the password
-		$credentials['password'] = str_replace(chr(0), '', $credentials['password']);
-
-		if (empty($credentials['password']))
-		{
-			$response->status        = Authentication::STATUS_FAILURE;
-			$response->error_message = Text::_('MAPPED_LDAP_EMPTY_PASSWORDxxx');
-
-			return false;
-		}
-
-		$userParams = ComponentHelper::getParams('com_users');
-
-		// If the site configuration does not allow for user registration check for a matching username.
-		if ($userParams->get('allowUserRegistration'))
-		{
-			return true;
-		}
-
-		if (UserHelper::getUserId($credentials['username']))
-		{
-			return true;
-		}
-
-		$response->status        = Authentication::STATUS_FAILURE;
-		$response->error_message = Text::_('MAPPED_LDAP_USER_NOT_REGISTEREDxxx');
-
-		return false;
-	}
+    // Connection / search
+    private const DIRECT = 1, SEARCH = 0;
+
+    public bool $allowReferrals = true;
+
+    protected $autoloadLanguage = true;
+
+    private string $baseFilter = '';
+
+    /**
+     * Triggers error in parent and factory, because they didn't add the db using a container. Seems like if that's what
+     * should have been done, then they should have done it...
+     *
+     * @var DatabaseDriver
+     */
+    protected $db;
+
+    private string $emailAttribute = '';
+
+    public string $host = '';
+
+    private int $method = 0;
+
+    private string $nameAttribute = '';
+
+    private bool $override = false;
+
+    private int $port = 0;
+
+    private string $query = '';
+
+    /**
+     * LDAP Resource Identifier
+     *
+     * @var    resource|null
+     * @since  1.0
+     */
+    private $resource = null;
+
+    public string $userName;
+
+    private string $userPassword = '';
+
+    private string $usersFilter = '';
+
+    /**
+     * Destructor.
+     */
+    public function __destruct()
+    {
+        $this->unbind();
+    }
+
+    /**
+     * Binds to the LDAP directory
+     *
+     * @param   AuthenticationResponse  $response
+     * @param   string                  $username     The username
+     * @param   string                  $password     The password
+     * @param   bool                    $useUsername  ...
+     *
+     * @return  boolean
+     *
+     * @since   1.0
+     */
+    public function bind(
+        AuthenticationResponse $response,
+        string $username = '',
+        string $password = '',
+        bool $useUsername = false
+    ): bool
+    {
+        if (!$this->resource)
+        {
+            if (!$this->connect($response))
+            {
+                return false;
+            }
+        }
+
+        $username = $username ?: $this->userName;
+        $password = $password ?: $this->userPassword;
+
+        if (!$this->usersFilter or $useUsername)
+        {
+            $distinguishedName = $username;
+        }
+        elseif (strlen($username))
+        {
+            $distinguishedName = str_replace('[username]', $username, $this->usersFilter);
+        }
+        else
+        {
+            $distinguishedName = '';
+        }
+
+        return ldap_bind($this->resource, $distinguishedName, $password);
+    }
+
+    /**
+     * Checks if a subdomain rule is relevant.
+     *
+     * @param   array   $emails the emails to check
+     * @param   array   $subDomains
+     *
+     * @return bool
+     */
+    private function checkSDRelevance(array $emails, array $subDomains): bool
+    {
+        $domain = (string) $this->params->get('domain');
+
+        foreach ($subDomains as $subDomain)
+        {
+            foreach ($emails as $email)
+            {
+                $pieces = explode('@', $email);
+
+                // Invalid or irrelevant
+                if (!$emailDomain = array_pop($pieces))
+                {
+                    continue;
+                }
+
+                // Base domain configured => all addresses must have the same base domain
+                if ($domain)
+                {
+                    if (strpos($emailDomain, ".$domain") === false)
+                    {
+                        continue;
+                    }
+
+                    if (str_replace(".$domain", '', $emailDomain) === $subDomain)
+                    {
+                        return true;
+                    }
+                }
+                // The 'subdomain' is a complete match for the email domain, allowing collected emails from multiple issuers
+                elseif ($subDomain === $emailDomain)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Connect to an LDAP server
+     *
+     * @param   AuthenticationResponse  $response  the joomla response
+     *
+     * @return  bool
+     */
+    private function connect(AuthenticationResponse $response): bool
+    {
+        if (!$this->resource = ldap_connect($this->host, $this->port))
+        {
+            $response->status        = Authentication::STATUS_FAILURE;
+            $response->error_message = Text::_('MAPPED_LDAP_CONNECTION_FAILED');
+
+            return false;
+        }
+
+        // Other versions no longer supported => parameter check removed
+        if (!ldap_set_option($this->resource, LDAP_OPT_PROTOCOL_VERSION, 3))
+        {
+            $response->status        = Authentication::STATUS_FAILURE;
+            $response->error_message = Text::_('MAPPED_LDAP_OPT_PROTOCOL_VERSION_FAILED');
+
+            return false;
+        }
+
+        if (!ldap_set_option($this->resource, LDAP_OPT_REFERRALS, $this->allowReferrals))
+        {
+            $response->status        = Authentication::STATUS_FAILURE;
+            $response->error_message = Text::_('MAPPED_LDAP_OPT_REFERRALS_FAILED');
+
+            return false;
+        }
+
+        // Apparently insecure without TLS => parameter check removed
+        if (!ldap_start_tls($this->resource))
+        {
+            $response->status        = Authentication::STATUS_FAILURE;
+            $response->error_message = Text::_('MAPPED_LDAP_TLS_NEGOTIATION_FAILED');
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Sets up the array of filters used in searches.
+     *
+     * @param   string[]  $credentials  the credentials of the user attempting authentication
+     *
+     * @return array the filter strings
+     */
+    private function getFilters(array $credentials): array
+    {
+        $filterUN = ldap_escape($credentials['username'], null, LDAP_ESCAPE_FILTER);
+        $filters  = str_replace('[search]', str_replace(';', '\3b', $filterUN), $this->query);
+        $filters  = explode(';', $filters);
+
+        foreach ($filters as $key => $filter)
+        {
+            $filters[$key] = '(' . str_replace('\3b', ';', $filter) . ')';
+        }
+
+        return $filters;
+    }
+
+    /**
+     * Gets the group ids to which the user should be assigned.
+     *
+     * @param   User    $user   the user object
+     * @param   string  $email  the email value returned by the query
+     *
+     * @return array the ids to which the user should be assigned
+     */
+    private function getGroupIDs(array $result, User $user, string $email): array
+    {
+        /** @var Registry $params */
+        $params   = $this->params;
+        $groupIDs = [];
+
+        // Futureproof group id assignment by ensuring that the id is always the same as the value.
+
+        // Keeps existing assignments
+        if ($user->id)
+        {
+            foreach ($user->groups as $groupID)
+            {
+                $groupIDs[$groupID] = $groupID;
+            }
+        }
+
+        // If there are no rules we're done.
+        if (!$rules = $params->get('rules'))
+        {
+            return $groupIDs;
+        }
+
+        $emails     = (string) $params->get('emails');
+        $emails     = empty($result[$emails]) ? [$email] : $result[$emails];
+        $ldapGroups = (string) $params->get('ldap_groups');
+        $ldapGroups = empty($result[$ldapGroups]) ? [] : $result[$ldapGroups];
+
+        foreach ($rules as $rule)
+        {
+            // The rule does not contain a group assignment => invalid and hopefully impossible
+            if (!$groupID = (int) $rule->groupID)
+            {
+                continue;
+            }
+
+            // The rule restricts ldap groups
+            if ($ruleGroups = explode(',', str_replace(' ', '', $rule->ldap_group)))
+            {
+                if (!$ldapGroups or !array_intersect($ruleGroups, $ldapGroups))
+                {
+                    // No group assignment or no relevant group assignment
+                    continue;
+                }
+            }
+
+            // The rule restricts subdomains
+            if ($subDomains = explode(',', str_replace(' ', '', $rule->subdomain)))
+            {
+                if (!$this->checkSDRelevance($emails, $subDomains))
+                {
+                    // No relevant subdomain found among the user's email addresses
+                    continue;
+                }
+            }
+
+            $groupIDs[$groupID] = $groupID;
+        }
+
+        return $groupIDs;
+    }
+
+    /**
+     * Maps the user id to the relevant group ids.
+     *
+     * @param   int    $userID    the user id
+     * @param   array  $groupIDs  the group ids
+     *
+     * @return void
+     */
+    private function mapGroupIDs(int $userID, array $groupIDs)
+    {
+        $db       = $this->db;
+        $map      = $db->quoteName('#__user_usergroup_map');
+        $mGroupID = $db->quoteName('group_id');
+        $mUserID  = $db->quoteName('user_id');
+
+        foreach ($groupIDs as $groupID)
+        {
+            // Skip existing user -> user group assignments.
+            $query = $db->getQuery(true);
+            $query->select('*')->from($map)->where("$mUserID = $userID")->where("$mGroupID = $groupID");
+            $db->setQuery($query);
+
+            if ($db->loadAssoc())
+            {
+                continue;
+            }
+
+            $query = $db->getQuery(true);
+            $query->insert($map)->columns([$mGroupID, $mUserID])->values("$groupID, $userID");
+            $db->setQuery($query);
+            $db->execute();
+        }
+
+        $groupIDs = implode(',', $groupIDs);
+        $query    = $db->getQuery(true);
+        $query->delete($map)->where("$mUserID = $userID")->where("$mGroupID NOT IN ($groupIDs)");
+        $db->setQuery($query);
+        $db->execute();
+    }
+
+    /**
+     * Authenticates a user and maps it into specifically configured groups or the configured default group.
+     *
+     * @param   array                   $credentials  Array holding the user credentials
+     * @param   array                   $options      Array of extra options
+     * @param   AuthenticationResponse  $response     the response to the authentication event
+     *
+     * @return  void success is stored in the response->status
+     * @noinspection PhpUnusedParameterInspection
+     * @throws Exception
+     */
+    public function onUserAuthenticate(array $credentials, array $options, AuthenticationResponse $response)
+    {
+        /** @var Registry $params */
+        $params         = $this->params;
+        $this->override = (bool) $params->get('override');
+        $response->type = 'LDAP';
+
+        // Error messaging performed on the AuthenticationResponse object.
+        if (!$this->validateCredentials($credentials, $response))
+        {
+            return;
+        }
+
+        // Error messaging performed on the AuthenticationResponse object.
+        if (!$this->validateConfiguration($response))
+        {
+            return;
+        }
+
+        // User not found, allow Joomla to continue with no messaging
+        if (!$result = $this->search($credentials, $response))
+        {
+            return;
+        }
+
+        if (empty($result[$this->emailAttribute]) or empty($result[$this->nameAttribute]))
+        {
+            $response->status        = Authentication::STATUS_FAILURE;
+            $response->error_message = Text::_('MAPPED_LDAP_ATTRIBUTE_CONFIGURATION_INVALID');
+
+            return;
+        }
+
+        $email    = reset($result[$this->emailAttribute]);
+        $name     = reset($result[$this->nameAttribute]);
+        $rules    = $params->get('rules');
+        $userName = $credentials['username'];
+        $user     = User::getInstance($userName);
+        $new      = empty($user->id);
+
+        // The search was successful and no mapping can take place
+        if (!$rules)
+        {
+            $response->email         = $email;
+            $response->error_message = '';
+            $response->fullname      = $name;
+            $response->status        = Authentication::STATUS_SUCCESS;
+            $response->username      = $userName;
+
+            return;
+        }
+
+        if ($new)
+        {
+            $user->email    = $email;
+            $user->name     = $name;
+            $user->username = $userName;
+        }
+
+        // No configured groups were applicable.
+        if (!$groupIDs = $this->getGroupIDs($result, $user, $email))
+        {
+            // Override Joomla's handling by not authenticating.
+            if ($new and $this->override)
+            {
+                $response->status        = Authentication::STATUS_FAILURE;
+                $response->error_message = Text::_('MAPPED_LDAP_NO_APPLICABLE_RULES');
+
+                return;
+            }
+
+            // Joomla will take care of the default group on its own.
+            $response->email         = $email;
+            $response->error_message = '';
+            $response->fullname      = $name;
+            $response->status        = Authentication::STATUS_SUCCESS;
+            $response->username      = $userName;
+
+            return;
+        }
+
+        $defaultID = ComponentHelper::getParams('com_users')->get('new_usertype');
+
+        // Create a new user to map with
+        if ($new)
+        {
+            $user->groups[$defaultID] = $defaultID;
+
+            if (!$user->save())
+            {
+                $response->status        = Authentication::STATUS_FAILURE;
+                $response->error_message = Text::_('MAPPED_LDAP_NEW_USER_NOT_SAVED');
+
+                return;
+            }
+        }
+
+        // Add the default group if override is not enabled
+        if ($new and !$this->override)
+        {
+            $groupIDs[$defaultID] = $defaultID;
+        }
+
+        $this->mapGroupIDs($user->id, $groupIDs);
+
+        $response->email         = $email;
+        $response->error_message = '';
+        $response->fullname      = $name;
+        $response->status        = Authentication::STATUS_SUCCESS;
+        $response->username      = $userName;
+    }
+
+    /**
+     * Searches for the user by querying the LDAP server.
+     *
+     * @param   array                   $credentials  the username and password entered by the user
+     * @param   AuthenticationResponse  $response     the response to the authentication event
+     *
+     * @return array
+     */
+    private function search(array $credentials, AuthenticationResponse $response): array
+    {
+        if (!$this->connect($response))
+        {
+            return [];
+        }
+
+        $filters  = $this->getFilters($credentials);
+        $userName = $credentials['username'];
+        $result   = [];
+        $success  = false;
+
+        switch ($this->method)
+        {
+            case self::SEARCH:
+
+                if ($this->bind($response))
+                {
+                    $result = $this->query($filters);
+
+                    if (!$result or empty($result['dn']))
+                    {
+                        $response->status        = Authentication::STATUS_FAILURE;
+                        $response->error_message = Text::_('MAPPED_LDAP_USERNAME_INVALID');
+                    }
+                    elseif (!$success = $this->bind($response, $result['dn'], $credentials['password'], true))
+                    {
+                        $response->status        = Authentication::STATUS_FAILURE;
+                        $response->error_message = Text::_('MAPPED_LDAP_PASSWORD_INVALID');
+                    }
+                }
+
+                break;
+
+            case self::DIRECT:
+
+                $dnUN = ldap_escape($userName, null, LDAP_ESCAPE_DN);
+
+                if ($success = $this->bind($response, $dnUN, $credentials['password']))
+                {
+                    $result = $this->query($filters);
+
+                    if (!$result or empty($result['dn']))
+                    {
+                        $response->status        = Authentication::STATUS_FAILURE;
+                        $response->error_message = Text::_('MAPPED_LDAP_USER_DATA_INCONSISTENT');
+                    }
+                }
+                else
+                {
+                    $response->status        = Authentication::STATUS_FAILURE;
+                    $response->error_message = Text::_('MAPPED_LDAP_PASSWORD_INVALID');
+                }
+
+                break;
+        }
+
+        $success = ($success and $this->unbind($response));
+
+        return ($success and $result) ? $result : [];
+    }
+
+    /**
+     * Perform an LDAP search
+     *
+     * @param   string[]  $filters  search filters
+     *
+     * @return  array  search results
+     */
+    public function query(array $filters): array
+    {
+        // Required by signature, but unused
+        $dummy    = [];
+        $resource = $this->resource;
+        $results  = [];
+
+        foreach ($filters as $filter)
+        {
+            if (!$initialResult = ldap_search($resource, $this->baseFilter, $filter, $dummy))
+            {
+                continue;
+            }
+            elseif (!$count = ldap_count_entries($resource, $initialResult))
+            {
+                continue;
+            }
+
+            $nextResult = null;
+
+            for ($index = 0; $index < $count; $index++)
+            {
+                $results[$index] = [];
+
+                $nextResult = $index ? ldap_next_entry($resource, $nextResult) : ldap_first_entry($resource, $initialResult);
+
+                // Load user-specified attributes
+                $attributes = ldap_get_attributes($this->resource, $nextResult);
+
+                // TODO clean up this non-speaking garbage
+                // LDAP returns an array of arrays, fit this into attributes result array
+                foreach ($attributes as $ki => $ai)
+                {
+                    if (is_array($ai))
+                    {
+                        $results[$index][$ki] = [];
+
+                        for ($k = 0; $k < $ai['count']; $k++)
+                        {
+                            $results[$index][$ki][$k] = $ai[$k];
+                        }
+                    }
+                }
+
+                $results[$index]['dn'] = ldap_get_dn($this->resource, $nextResult);
+            }
+        }
+
+        return $results ? reset($results) : $results;
+    }
+
+    /**
+     * Unbinds from the LDAP directory
+     *
+     * @param   AuthenticationResponse|null  $response  the response if available, used for messaging
+     *
+     * @return  bool
+     */
+    public function unbind(AuthenticationResponse $response = null): bool
+    {
+        if ($this->resource)
+        {
+            if (!ldap_unbind($this->resource))
+            {
+                if ($response)
+                {
+                    $response->status        = Authentication::STATUS_FAILURE;
+                    $response->error_message = Text::_('MAPPED_LDAP_RESOURCE_RELEASE_FAILED');
+                }
+
+                return false;
+            }
+
+            $this->resource = null;
+        }
+
+        return true;
+    }
+
+    /**
+     * Validates the plugin configuration.
+     *
+     * @param   AuthenticationResponse  $response  the response to the authentication event
+     *
+     * @return bool
+     */
+    private function validateConfiguration(AuthenticationResponse $response): bool
+    {
+        /** @var Registry $parameters */
+        $parameters = $this->params;
+
+        $this->allowReferrals = !((int) $parameters->get('no_referrals') === 0);
+
+        if (!$this->emailAttribute = (string) $parameters->get('email'))
+        {
+            $response->status        = Authentication::STATUS_FAILURE;
+            $response->error_message = Text::_('MAPPED_LDAP_EMAIL_ATTRIBUTE_MISSING');
+
+            return false;
+        }
+
+        if (!$this->host = (string) $parameters->get('host'))
+        {
+            $response->status        = Authentication::STATUS_FAILURE;
+            $response->error_message = Text::_('MAPPED_LDAP_HOST_MISSING');
+
+            return false;
+        }
+
+        $this->method = (int) $parameters->get('method') === 1 ? 1 : 0;
+
+        if (!$this->nameAttribute = (string) $parameters->get('name'))
+        {
+            $response->status        = Authentication::STATUS_FAILURE;
+            $response->error_message = Text::_('MAPPED_LDAP_NAME_ATTRIBUTE_MISSING');
+
+            return false;
+        }
+
+        if (!$this->port = (int) $parameters->get('port'))
+        {
+            $response->status        = Authentication::STATUS_FAILURE;
+            $response->error_message = Text::_('MAPPED_LDAP_PORT_MISSING');
+
+            return false;
+        }
+
+        if (!$this->query = (string) $parameters->get('search'))
+        {
+            $response->status        = Authentication::STATUS_FAILURE;
+            $response->error_message = Text::_('MAPPED_LDAP_QUERY_MISSING');
+
+            return false;
+        }
+
+        if (!$this->userName = (string) $parameters->get('username'))
+        {
+            $response->status        = Authentication::STATUS_FAILURE;
+            $response->error_message = Text::_('MAPPED_LDAP_USERNAME_MISSING');
+
+            return false;
+        }
+
+        if (!$this->userPassword = (string) $parameters->get('password'))
+        {
+            $response->status        = Authentication::STATUS_FAILURE;
+            $response->error_message = Text::_('MAPPED_LDAP_PASSWORD_MISSING');
+
+            return false;
+        }
+
+        // The plugin is in charge but has no way to assign groups
+        if ($this->override and !$parameters->get('rules'))
+        {
+            $response->status        = Authentication::STATUS_FAILURE;
+            $response->error_message = Text::_('MAPPED_LDAP_MAPPING_CONFIGURATION_INVALID');
+
+            return false;
+        }
+
+        /**
+         * Distinguished Name (DN) Configuration
+         * c:       country name
+         * cn:      common name
+         * dc:      domain component
+         * l:       locality name
+         * o:       organization name
+         * ou:      organized unit name
+         * street:  street address
+         * st:      state or province name
+         * uid:     user id
+         */
+        $dns = "(cn|c|dc|l|o|ou|st|street|uid)";
+
+        /**
+         * TODO expand the pattern for other punctuation marks and escaped characters
+         * https://datatracker.ietf.org/doc/html/rfc4514
+         */
+        $value  = "(\d|\w|-)+";
+        $clause = "$dns=$value";
+
+        $pattern = "/^($clause,)*$clause$/i";
+        if (!$this->baseFilter = (string) $parameters->get('base_dn'))
+        {
+            $response->status        = Authentication::STATUS_FAILURE;
+            $response->error_message = Text::_('MAPPED_LDAP_BASE_DNS_MISSING');
+
+            return false;
+        }
+        elseif (preg_match($pattern, $this->baseFilter) !== 1)
+        {
+            $response->status        = Authentication::STATUS_FAILURE;
+            $response->error_message = Text::_('MAPPED_LDAP_BASE_DNS_INVALID');
+
+            return false;
+        }
+
+        $pattern = "/^($clause,)*$clause(;$clause(,$clause)*)?$/i";
+        if (!$this->usersFilter = $parameters->get('users_dn'))
+        {
+            $response->status        = Authentication::STATUS_FAILURE;
+            $response->error_message = Text::_('MAPPED_LDAP_USER_DNS_MISSING');
+
+            return false;
+        }
+        elseif (preg_match($pattern, $this->usersFilter) !== 1)
+        {
+            $response->status        = Authentication::STATUS_FAILURE;
+            $response->error_message = Text::_('MAPPED_LDAP_USER_DNS_INVALID');
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Validates the given credentials for plausibility. Actual validation is of course performed on the LDAP server. ;)
+     *
+     * @param   array                   $credentials  the username and password entered by the user
+     * @param   AuthenticationResponse  $response     the response to the authentication event
+     *
+     * @return bool
+     */
+    private function validateCredentials(array &$credentials, AuthenticationResponse $response): bool
+    {
+        // Strip null bytes from the password
+        $credentials['password'] = str_replace(chr(0), '', $credentials['password']);
+
+        if (empty($credentials['password']))
+        {
+            $response->status        = Authentication::STATUS_FAILURE;
+            $response->error_message = Text::_('MAPPED_LDAP_EMPTY_PASSWORD');
+
+            return false;
+        }
+
+        // Account exists
+        if (UserHelper::getUserId($credentials['username']))
+        {
+            return true;
+        }
+
+        $params     = $this->params;
+        $userParams = ComponentHelper::getParams('com_users');
+
+        // The site allows registration and has a group configured
+        if ($userParams->get('allowUserRegistration'))
+        {
+            return true;
+        }
+        // The plugin supersedes user settings there is at least one mappable group
+        elseif ($this->override and $params->get('rules'))
+        {
+            return true;
+        }
+
+        $response->status        = Authentication::STATUS_FAILURE;
+        $response->error_message = Text::_('MAPPED_LDAP_USER_NOT_REGISTERED');
+
+        return false;
+    }
 }
