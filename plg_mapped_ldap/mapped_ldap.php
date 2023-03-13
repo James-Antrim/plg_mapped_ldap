@@ -11,6 +11,7 @@
 
 defined('_JEXEC') or die;
 
+use Joomla\CMS\Access\Access;
 use Joomla\CMS\Authentication\Authentication;
 use Joomla\CMS\Authentication\AuthenticationResponse;
 use Joomla\CMS\Component\ComponentHelper;
@@ -87,16 +88,11 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
      * @param   string                  $password     The password
      * @param   bool                    $useUsername  ...
      *
-     * @return  boolean
+     * @return  bool
      *
      * @since   1.0
      */
-    public function bind(
-        AuthenticationResponse $response,
-        string $username = '',
-        string $password = '',
-        bool $useUsername = false
-    ): bool
+    public function bind(AuthenticationResponse $response, string $username = '', string $password = '', bool $useUsername = false): bool
     {
         if (!$this->resource)
         {
@@ -128,8 +124,8 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
     /**
      * Checks if a subdomain rule is relevant.
      *
-     * @param   array   $emails the emails to check
-     * @param   array   $subDomains
+     * @param   array  $emails  the emails to check
+     * @param   array  $subDomains
      *
      * @return bool
      */
@@ -442,26 +438,48 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
             return;
         }
 
-        $defaultID = ComponentHelper::getParams('com_users')->get('new_usertype');
-
         // Create a new user to map with
         if ($new)
         {
-            $user->groups[$defaultID] = $defaultID;
-
-            if (!$user->save())
+            if (!$this->override)
             {
-                $response->status        = Authentication::STATUS_FAILURE;
-                $response->error_message = Text::_('MAPPED_LDAP_NEW_USER_NOT_SAVED');
-
-                return;
+                $defaultID            = ComponentHelper::getParams('com_users')->get('new_usertype');
+                $groupIDs[$defaultID] = $defaultID;
             }
-        }
 
-        // Add the default group if override is not enabled
-        if ($new and !$this->override)
-        {
-            $groupIDs[$defaultID] = $defaultID;
+            $saved = false;
+            foreach ($groupIDs as $groupID)
+            {
+                if (Access::checkGroup($groupID, 'core.manage'))
+                {
+                    $user->groups[$groupID] = $groupID;
+
+                    if ($user->save())
+                    {
+                        $saved = true;
+                        break;
+                    }
+
+                    $response->status        = Authentication::STATUS_FAILURE;
+                    $response->error_message = Text::_('MAPPED_LDAP_NEW_USER_NOT_SAVED');
+
+                    return;
+                }
+            }
+
+            if (!$saved)
+            {
+                $defaultID                = reset($groupIDs);
+                $user->groups[$defaultID] = $defaultID;
+
+                if (!$user->save())
+                {
+                    $response->status        = Authentication::STATUS_FAILURE;
+                    $response->error_message = Text::_('MAPPED_LDAP_NEW_USER_NOT_SAVED');
+
+                    return;
+                }
+            }
         }
 
         $this->mapGroupIDs($user->id, $groupIDs);
@@ -579,17 +597,23 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
                 // Load user-specified attributes
                 $attributes = ldap_get_attributes($this->resource, $nextResult);
 
-                // TODO clean up this non-speaking garbage
-                // LDAP returns an array of arrays, fit this into attributes result array
-                foreach ($attributes as $ki => $ai)
+                /**
+                 * $attributes = [
+                 *      attribute name => ['count' => # of values, index => value, ...], OR
+                 *      # => the previous attribute name, OR
+                 *      count => the number of attributes
+                 * ]
+                 */
+                foreach ($attributes as $aName => $aValues)
                 {
-                    if (is_array($ai))
+                    // An actual name => values pair
+                    if (is_array($aValues))
                     {
-                        $results[$index][$ki] = [];
+                        $results[$index][$aName] = [];
 
-                        for ($k = 0; $k < $ai['count']; $k++)
+                        for ($valuesKey = 0; $valuesKey < $aValues['count']; $valuesKey++)
                         {
-                            $results[$index][$ki][$k] = $ai[$k];
+                            $results[$index][$aName][$valuesKey] = $aValues[$valuesKey];
                         }
                     }
                 }
