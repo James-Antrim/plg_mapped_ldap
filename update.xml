@@ -4,7 +4,7 @@
         <description>This plugin maps authenticating users to user groups by configurable rules.</description>
         <maintainer>James Antrim</maintainer>
         <maintainerurl>https://www.thm.de/organizer</maintainerurl>
-        <version>4.0.2</version>
+        <version>4.0.3</version>
         <infourl title="THM Homepage">https://www.thm.de/site</infourl>
         <tags>
             <tag>stable</tag>
