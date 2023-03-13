@@ -281,7 +281,7 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
             }
 
             // The rule restricts ldap groups
-            if ($ruleGroups = explode(',', str_replace(' ', '', $rule->ldap_group)))
+            if ($ruleGroups = array_filter(explode(',', str_replace(' ', '', $rule->ldap_group))))
             {
                 if (!$ldapGroups or !array_intersect($ruleGroups, $ldapGroups))
                 {
@@ -291,7 +291,7 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
             }
 
             // The rule restricts subdomains
-            if ($subDomains = explode(',', str_replace(' ', '', $rule->subdomain)))
+            if ($subDomains = array_filter(explode(',', str_replace(' ', '', $rule->subdomain))))
             {
                 if (!$this->checkSDRelevance($emails, $subDomains))
                 {
