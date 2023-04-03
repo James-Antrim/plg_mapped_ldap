@@ -4,13 +4,13 @@
         <description>This plugin maps authenticating users to user groups by configurable rules.</description>
         <maintainer>James Antrim</maintainer>
         <maintainerurl>https://www.thm.de/organizer</maintainerurl>
-        <version>4.0.4</version>
+        <version>4.0.5</version>
         <infourl title="THM Homepage">https://www.thm.de/site</infourl>
         <tags>
             <tag>stable</tag>
         </tags>
         <targetplatform name="joomla" version="4.[0123456789]"/>
-        <php_minimum>7.4</php_minimum>
+        <php_minimum>8.1</php_minimum>
         <element>mapped_ldap</element>
         <type>plugin</type>
         <folder>authentication</folder>

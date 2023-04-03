@@ -21,6 +21,7 @@ use Joomla\CMS\User\User;
 use Joomla\CMS\User\UserHelper;
 use Joomla\Database\DatabaseDriver;
 use Joomla\Registry\Registry;
+use LDAP\Connection;
 
 /**
  * Mapped LDAP Authentication Plugin
@@ -35,6 +36,8 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
     protected $autoloadLanguage = true;
 
     private string $baseFilter = '';
+
+    private Connection $connection;
 
     /**
      * Triggers error in parent and factory, because they didn't add the db using a container. Seems like if that's what
@@ -58,14 +61,6 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
 
     private string $query = '';
 
-    /**
-     * LDAP Resource Identifier
-     *
-     * @var    resource|null
-     * @since  1.0
-     */
-    private $resource = null;
-
     public string $userName;
 
     private string $userPassword = '';
@@ -83,25 +78,18 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
     /**
      * Binds to the LDAP directory
      *
-     * @param   AuthenticationResponse  $response
-     * @param   string                  $username     The username
-     * @param   string                  $password     The password
-     * @param   bool                    $useUsername  ...
+     * @param   string  $username     The username
+     * @param   string  $password     The password
+     * @param   bool    $useUsername  ...
      *
      * @return  bool
-     *
-     * @since   1.0
      */
-    public function bind(AuthenticationResponse $response, string $username = '', string $password = '', bool $useUsername = false): bool
+    public function bind(
+        string $username = '',
+        string $password = '',
+        bool $useUsername = false
+    ): bool
     {
-        if (!$this->resource)
-        {
-            if (!$this->connect($response))
-            {
-                return false;
-            }
-        }
-
         $username = $username ?: $this->userName;
         $password = $password ?: $this->userPassword;
 
@@ -118,7 +106,7 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
             $distinguishedName = '';
         }
 
-        return ldap_bind($this->resource, $distinguishedName, $password);
+        return ldap_bind($this->connection, $distinguishedName, $password);
     }
 
     /**
@@ -148,7 +136,7 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
                 // Base domain configured => all addresses must have the same base domain
                 if ($domain)
                 {
-                    if (strpos($emailDomain, ".$domain") === false)
+                    if (!str_contains($emailDomain, ".$domain"))
                     {
                         continue;
                     }
@@ -178,7 +166,7 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
      */
     private function connect(AuthenticationResponse $response): bool
     {
-        if (!$this->resource = ldap_connect($this->host, $this->port))
+        if (!$this->connection = ldap_connect($this->host, $this->port))
         {
             $response->status        = Authentication::STATUS_FAILURE;
             $response->error_message = Text::_('MAPPED_LDAP_CONNECTION_FAILED');
@@ -187,7 +175,7 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
         }
 
         // Other versions no longer supported => parameter check removed
-        if (!ldap_set_option($this->resource, LDAP_OPT_PROTOCOL_VERSION, 3))
+        if (!ldap_set_option($this->connection, LDAP_OPT_PROTOCOL_VERSION, 3))
         {
             $response->status        = Authentication::STATUS_FAILURE;
             $response->error_message = Text::_('MAPPED_LDAP_OPT_PROTOCOL_VERSION_FAILED');
@@ -195,7 +183,7 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
             return false;
         }
 
-        if (!ldap_set_option($this->resource, LDAP_OPT_REFERRALS, $this->allowReferrals))
+        if (!ldap_set_option($this->connection, LDAP_OPT_REFERRALS, $this->allowReferrals))
         {
             $response->status        = Authentication::STATUS_FAILURE;
             $response->error_message = Text::_('MAPPED_LDAP_OPT_REFERRALS_FAILED');
@@ -204,7 +192,7 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
         }
 
         // Apparently insecure without TLS => parameter check removed
-        if (!ldap_start_tls($this->resource))
+        if (!ldap_start_tls($this->connection))
         {
             $response->status        = Authentication::STATUS_FAILURE;
             $response->error_message = Text::_('MAPPED_LDAP_TLS_NEGOTIATION_FAILED');
@@ -224,7 +212,7 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
      */
     private function getFilters(array $credentials): array
     {
-        $filterUN = ldap_escape($credentials['username'], null, LDAP_ESCAPE_FILTER);
+        $filterUN = ldap_escape($credentials['username'], '', LDAP_ESCAPE_FILTER);
         $filters  = str_replace('[search]', str_replace(';', '\3b', $filterUN), $this->query);
         $filters  = explode(';', $filters);
 
@@ -314,7 +302,7 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
      *
      * @return void
      */
-    private function mapGroupIDs(int $userID, array $groupIDs)
+    private function mapGroupIDs(int $userID, array $groupIDs): void
     {
         $db       = $this->db;
         $map      = $db->quoteName('#__user_usergroup_map');
@@ -357,7 +345,7 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
      * @noinspection PhpUnusedParameterInspection
      * @throws Exception
      */
-    public function onUserAuthenticate(array $credentials, array $options, AuthenticationResponse $response)
+    public function onUserAuthenticate(array $credentials, array $options, AuthenticationResponse $response): void
     {
         /** @var Registry $params */
         $params         = $this->params;
@@ -515,7 +503,7 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
         {
             case self::SEARCH:
 
-                if ($this->bind($response))
+                if ($this->bind())
                 {
                     $result = $this->query($filters);
 
@@ -524,7 +512,7 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
                         $response->status        = Authentication::STATUS_FAILURE;
                         $response->error_message = Text::_('MAPPED_LDAP_USERNAME_INVALID');
                     }
-                    elseif (!$success = $this->bind($response, $result['dn'], $credentials['password'], true))
+                    elseif (!$success = $this->bind($result['dn'], $credentials['password'], true))
                     {
                         $response->status        = Authentication::STATUS_FAILURE;
                         $response->error_message = Text::_('MAPPED_LDAP_PASSWORD_INVALID');
@@ -537,7 +525,7 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
 
                 $dnUN = ldap_escape($userName, null, LDAP_ESCAPE_DN);
 
-                if ($success = $this->bind($response, $dnUN, $credentials['password']))
+                if ($success = $this->bind($dnUN, $credentials['password']))
                 {
                     $result = $this->query($filters);
 
@@ -572,7 +560,7 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
     {
         // Required by signature, but unused
         $dummy    = [];
-        $resource = $this->resource;
+        $resource = $this->connection;
         $results  = [];
 
         foreach ($filters as $filter)
@@ -595,7 +583,7 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
                 $nextResult = $index ? ldap_next_entry($resource, $nextResult) : ldap_first_entry($resource, $initialResult);
 
                 // Load user-specified attributes
-                $attributes = ldap_get_attributes($this->resource, $nextResult);
+                $attributes = ldap_get_attributes($this->connection, $nextResult);
 
                 /**
                  * $attributes = [
@@ -618,7 +606,7 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
                     }
                 }
 
-                $results[$index]['dn'] = ldap_get_dn($this->resource, $nextResult);
+                $results[$index]['dn'] = ldap_get_dn($this->connection, $nextResult);
             }
         }
 
@@ -634,20 +622,15 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
      */
     public function unbind(AuthenticationResponse $response = null): bool
     {
-        if ($this->resource)
+        if (!ldap_unbind($this->connection))
         {
-            if (!ldap_unbind($this->resource))
+            if ($response)
             {
-                if ($response)
-                {
-                    $response->status        = Authentication::STATUS_FAILURE;
-                    $response->error_message = Text::_('MAPPED_LDAP_RESOURCE_RELEASE_FAILED');
-                }
-
-                return false;
+                $response->status        = Authentication::STATUS_FAILURE;
+                $response->error_message = Text::_('MAPPED_LDAP_RESOURCE_RELEASE_FAILED');
             }
 
-            $this->resource = null;
+            return false;
         }
 
         return true;

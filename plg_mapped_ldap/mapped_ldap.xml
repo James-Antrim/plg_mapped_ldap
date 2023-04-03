@@ -7,7 +7,7 @@
     <creationDate>June 2021</creationDate>
     <copyright>TH Mittelhessen 2020</copyright>
     <licence>GNU GPL v.3</licence>
-    <version>4.0.4</version>
+    <version>4.0.5</version>
     <description>MAPPED_LDAP_DESC</description>
     <files>
         <filename plugin="mapped_ldap">mapped_ldap.php</filename>
