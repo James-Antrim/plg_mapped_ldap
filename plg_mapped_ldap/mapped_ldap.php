@@ -68,14 +68,6 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
     private string $usersFilter = '';
 
     /**
-     * Destructor.
-     */
-    public function __destruct()
-    {
-        $this->unbind();
-    }
-
-    /**
      * Binds to the LDAP directory
      *
      * @param   string  $username     The username
