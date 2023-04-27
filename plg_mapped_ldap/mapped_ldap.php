@@ -49,6 +49,8 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
 
     private string $emailAttribute = '';
 
+    private string $forenamesAttribute = '';
+
     public string $host = '';
 
     private int $method = 0;
@@ -60,6 +62,8 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
     private int $port = 0;
 
     private string $query = '';
+
+    private string $surnamesAttribute = '';
 
     public string $userName;
 
@@ -370,12 +374,14 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
             return;
         }
 
-        $email    = reset($result[$this->emailAttribute]);
-        $name     = reset($result[$this->nameAttribute]);
-        $rules    = $params->get('rules');
-        $userName = $credentials['username'];
-        $user     = User::getInstance($userName);
-        $new      = empty($user->id);
+        $email     = reset($result[$this->emailAttribute]);
+        $forenames = !empty($result[$this->forenamesAttribute]) ? reset($result[$this->forenamesAttribute]) : null;
+        $name      = reset($result[$this->nameAttribute]);
+        $rules     = $params->get('rules');
+        $surnames  = !empty($result[$this->surnamesAttribute]) ? reset($result[$this->surnamesAttribute]) : null;
+        $userName  = $credentials['username'];
+        $user      = User::getInstance($userName);
+        $new       = empty($user->id);
 
         // The search was successful and no mapping can take place
         if (!$rules)
@@ -391,9 +397,11 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
 
         if ($new)
         {
-            $user->email    = $email;
-            $user->name     = $name;
-            $user->username = $userName;
+            $user->email     = $email;
+            $user->forenames = $forenames;
+            $user->name      = $name;
+            $user->surnames  = $surnames;
+            $user->username  = $userName;
         }
 
         // No configured groups were applicable.
@@ -667,6 +675,9 @@ class PlgAuthenticationMapped_LDAP extends CMSPlugin
 
             return false;
         }
+
+        $this->surnamesAttribute  = (string) $parameters->get('surnames');
+        $this->forenamesAttribute = (string) $parameters->get('forenames');
 
         if (!$this->port = (int) $parameters->get('port'))
         {
