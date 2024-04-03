@@ -43,4 +43,26 @@
             </downloadurl>
         </downloads>
     </update>
+    <update>
+        <name>Mapped LDAP - Authentication Plugin</name>
+        <description>This plugin maps authenticating users to user groups by configurable rules.</description>
+        <maintainer>James Antrim</maintainer>
+        <maintainerurl>https://www.thm.de/organizer</maintainerurl>
+        <version>5.0.0</version>
+        <infourl title="THM Homepage">https://www.thm.de/site</infourl>
+        <tags>
+            <tag>stable</tag>
+        </tags>
+        <targetplatform name="joomla" version="5.[0123456789]"/>
+        <php_minimum>8.1</php_minimum>
+        <element>mapped_ldap</element>
+        <type>plugin</type>
+        <folder>authentication</folder>
+        <client>site</client>
+        <downloads>
+            <downloadurl type="full" format="zip">
+                https://github.com/James-Antrim/plg_mapped_ldap/raw/main/updates/5/plg_mapped_ldap.zip
+            </downloadurl>
+        </downloads>
+    </update>
 </updates>
