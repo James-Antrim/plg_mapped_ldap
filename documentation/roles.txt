@@ -11,13 +11,13 @@ H			Honorarprofessoren		(Angehörige der HS) ehrenamtliche Professoren, von THM 
 I			stud./allg. Hilfskraft	(Mitglieder der HS) Tutoren etc., teils Studis von anderen HS
 J			stud. Aushilfen			(Mitglieder der HS) studentische Aushilfen, , Besch. TV-H (BAT)
 K			Karenz f. Lehrb.		(Angehörige der HS) Lehrbeuaftragte ausserhalb des laufenden Semesters ohne Folgevertrag
-L			Lehrbeauftragte			(Angehörigee der HS) zeitweise für die Hochschule arbeitende, lehrende Personen
+L			Lehrbeauftragte			(Angehörige der HS) zeitweise für die Hochschule arbeitende, lehrende Personen
 M			Mitarbeiter				(Mitglieder der HS) fest Angestellte der Hochschule
 O			Gasthörer				(Angehörige der HS) Personen die gegen Gebühr für ein Semester an einer Vorlesung teilnehmen
 P			Professoren				(Mitglieder der HS) fest angestellte Professoren bzw. Beamte
 R			Praktikanten			(Angehörige der HS) zeitweise für die Hochschule arbeitende Personen
 S			Studierende				(Mitglieder der HS) Studierende der THM
-T			Emeriti					(Angehörige der HS) Hochschullehrer (i.d.R. nur Professoren) behalten Rechte für Lehrveranstaltungen und Prüfungen (keine Office-Lizenzen!)
+T			Emeriti					(Angehörige der HS) Hochschullehrer (i.d.R. nur Professoren)
 U			Alumni					(Angehörige der HS) Alumni (Anträge kommen von Frau Roos)
 V			wiss. Mitarbeiter		(Mitglieder der HS) wissenschaftliche Mitarbeiter
 W			wiss. Hilfskraft		(Mitglieder der HS) wissenschaftliche Hilfskraft
