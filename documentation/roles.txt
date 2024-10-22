@@ -1,0 +1,23 @@
+Nutzertyp	NutzertypBezeichnung	NutzertypInfo
+0			nicht zugeordnet		nicht zugeordnet
+A			Auszubildende			(Mitglieder der HS) fest angestellt, SONDERFALL PKZ = 1 soll sein wg. Mensa
+B			LfbA/Lehrer/Lektor		(Mitglieder der HS) Lehrende für besondere Aufgaben, Lehrer, Lektoren
+C			Gastwissenschaftler		(Angehörige der HS) kommt von FTN - kein Mitglied der Hochschule - Status wie Lehrbeauftragter
+D			Doktoranden				(Angehörige der HS) kommt von FTN - Stipendium / Doktorand - kein Mitglied der Hochschule - Status wie Lehrbeauftrager
+E			Externe					(Externe) zeitweise für die Hochschule arbeitende Firmen und Personen
+F			Freie Mitarbeiter		(Angehörige der HS) Personen die nicht fest angestellt sind aber wie Mitarbeiter behandelt werden
+G			Gäste					Gästekarten und Bibliothekskarten
+H			Honorarprofessoren		(Angehörige der HS) ehrenamtliche Professoren, von THM verliehener Ehrentitel Professor (Prof.)
+I			stud./allg. Hilfskraft	(Mitglieder der HS) Tutoren etc., teils Studis von anderen HS
+J			stud. Aushilfen			(Mitglieder der HS) studentische Aushilfen, , Besch. TV-H (BAT)
+K			Karenz f. Lehrb.		(Angehörige der HS) Lehrbeuaftragte ausserhalb des laufenden Semesters ohne Folgevertrag
+L			Lehrbeauftragte			(Angehörigee der HS) zeitweise für die Hochschule arbeitende, lehrende Personen
+M			Mitarbeiter				(Mitglieder der HS) fest Angestellte der Hochschule
+O			Gasthörer				(Angehörige der HS) Personen die gegen Gebühr für ein Semester an einer Vorlesung teilnehmen
+P			Professoren				(Mitglieder der HS) fest angestellte Professoren bzw. Beamte
+R			Praktikanten			(Angehörige der HS) zeitweise für die Hochschule arbeitende Personen
+S			Studierende				(Mitglieder der HS) Studierende der THM
+T			Emeriti					(Angehörige der HS) Hochschullehrer (i.d.R. nur Professoren) behalten Rechte für Lehrveranstaltungen und Prüfungen (keine Office-Lizenzen!)
+U			Alumni					(Angehörige der HS) Alumni (Anträge kommen von Frau Roos)
+V			wiss. Mitarbeiter		(Mitglieder der HS) wissenschaftliche Mitarbeiter
+W			wiss. Hilfskraft		(Mitglieder der HS) wissenschaftliche Hilfskraft
