@@ -1,30 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<extension type="plugin" group="authentication" method="upgrade">
-    <name>plg_mapped_ldap</name>
+<extension group="authentication" method="upgrade" type="plugin">
     <author>James Antrim</author>
     <authorEmail>james.antrim@nm.thm.de</authorEmail>
     <authorUrl>www.thm.de</authorUrl>
-    <creationDate>June 2021</creationDate>
-    <copyright>TH Mittelhessen 2020</copyright>
-    <licence>GNU GPL v.3</licence>
-    <version>5.0.0</version>
-    <description>MAPPED_LDAP_DESC</description>
-    <files>
-        <filename plugin="mapped_ldap">mapped_ldap.php</filename>
-        <folder>Fields</folder>
-    </files>
-    <languages>
-        <language tag="de-DE">de-DE/de-DE.plg_authentication_mapped_ldap.ini</language>
-        <language tag="de-DE">de-DE/de-DE.plg_authentication_mapped_ldap.sys.ini</language>
-        <language tag="en-GB">en-GB/en-GB.plg_authentication_mapped_ldap.ini</language>
-        <language tag="en-GB">en-GB/en-GB.plg_authentication_mapped_ldap.sys.ini</language>
-    </languages>
-    <config>
+    <config addfieldpath="/plugins/authentication/mapped_ldap/Fields" addfieldprefix="THM\MappedLDAP\Fields">
         <fields name="params">
             <fieldset name="basic" addfieldpath="/plugins/authentication/mapped_ldap/Fields">
-                <field name="default" type="usersDefault" label="MAPPED_LDAP_USERS_DEFAULT"
+                <field name="default" type="UsersDefault" label="MAPPED_LDAP_USERS_DEFAULT"
                        description="MAPPED_LDAP_USERS_DEFAULT_DESC"/>
-                <field name="override" type="override" label="MAPPED_LDAP_OVERRIDE" class="btn-group btn-group-yesno" default="0"
+                <field name="override" type="Override" label="MAPPED_LDAP_OVERRIDE" class="btn-group btn-group-yesno" default="0"
                        filter="integer">
                     <option value="0">JNO</option>
                     <option value="1">JYES</option>
@@ -34,7 +18,7 @@
                 <field name="rules" type="subform" label="MAPPED_LDAP_RULES" description="MAPPED_LDAP_RULES_DESC"
                        buttons="add,remove" layout="joomla.form.field.subform.repeatable-table" multiple="true">
                     <form>
-                        <field name="groupID" type="groupid" label="MAPPED_LDAP_USER_GROUP" required="true">
+                        <field name="groupID" type="GroupID" label="MAPPED_LDAP_USER_GROUP" required="true">
                             <option value="">MAPPED_LDAP_SELECT_USER_GROUP</option>
                         </field>
                         <field name="ldap_group" type="text" label="MAPPED_LDAP_LDAP_GROUP"
@@ -86,9 +70,27 @@
             </fieldset>
         </fields>
     </config>
+    <copyright>TH Mittelhessen 2020</copyright>
+    <creationDate>June 2021</creationDate>
+    <description>MAPPED_LDAP_DESC</description>
+    <files>
+        <file>MappedLDAP.php</file>
+        <folder>Fields</folder>
+        <folder>language</folder>
+        <folder plugin="mapped_ldap">services</folder>
+    </files>
+    <languages folder="language">
+        <language tag="de-DE">de-DE/plg_authentication_mapped_ldap.ini</language>
+        <language tag="de-DE">de-DE/plg_authentication_mapped_ldap.sys.ini</language>
+        <language tag="en-GB">en-GB/plg_authentication_mapped_ldap.ini</language>
+        <language tag="en-GB">en-GB/plg_authentication_mapped_ldap.sys.ini</language>
+    </languages>
+    <licence>GNU GPL v.3</licence>
+    <name>plg_mapped_ldap</name>
     <updateservers>
-        <server type="extension" name="Mapped LDAP" priority="1">
+        <server type="extension" name="Mapped LDAP Plugin Update Site" priority="1">
             https://github.com/James-Antrim/plg_mapped_ldap/raw/main/update.xml
         </server>
     </updateservers>
+    <version>5.0.0</version>
 </extension>
