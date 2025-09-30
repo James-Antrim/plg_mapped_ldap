@@ -10,15 +10,11 @@
 
 namespace THM\MappedLDAP;
 
-use Joomla\CMS\Access\Access;
+use Joomla\CMS\{Access\Access, Component\ComponentHelper, Factory, Language\Text, Plugin\CMSPlugin, Table\Usergroup};
 use Joomla\CMS\Authentication\{Authentication, AuthenticationResponse};
-use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Event\User\AuthenticationEvent;
-use Joomla\CMS\Language\Text;
-use Joomla\CMS\Plugin\CMSPlugin;
-use Joomla\CMS\User\User;
-use Joomla\CMS\User\UserHelper;
-use Joomla\Database\DatabaseDriver;
+use Joomla\CMS\User\{User, UserHelper};
+use Joomla\Database\{DatabaseDriver, DatabaseInterface};
 use Joomla\Event\SubscriberInterface;
 use Joomla\Registry\Registry;
 use LDAP\Connection;
@@ -82,7 +78,6 @@ class MappedLDAP extends CMSPlugin implements SubscriberInterface
     {
         $credentials = $event->getCredentials();
         $response    = $event->getAuthenticationResponse();
-
         /** @var Registry $params */
         $params         = $this->params;
         $this->override = (bool) $params->get('override');
@@ -106,7 +101,6 @@ class MappedLDAP extends CMSPlugin implements SubscriberInterface
         if (empty($result[$this->emailAttribute]) or empty($result[$this->nameAttribute])) {
             $response->status        = Authentication::STATUS_FAILURE;
             $response->error_message = Text::_('MAPPED_LDAP_ATTRIBUTE_CONFIGURATION_INVALID');
-
             return;
         }
 
@@ -126,7 +120,6 @@ class MappedLDAP extends CMSPlugin implements SubscriberInterface
             $response->fullname      = $name;
             $response->status        = Authentication::STATUS_SUCCESS;
             $response->username      = $userName;
-
             return;
         }
 
@@ -144,7 +137,6 @@ class MappedLDAP extends CMSPlugin implements SubscriberInterface
             if ($new and $this->override) {
                 $response->status        = Authentication::STATUS_FAILURE;
                 $response->error_message = Text::_('MAPPED_LDAP_NO_APPLICABLE_RULES');
-
                 return;
             }
 
@@ -154,7 +146,6 @@ class MappedLDAP extends CMSPlugin implements SubscriberInterface
             $response->fullname      = $name;
             $response->status        = Authentication::STATUS_SUCCESS;
             $response->username      = $userName;
-
             return;
         }
 
@@ -177,7 +168,6 @@ class MappedLDAP extends CMSPlugin implements SubscriberInterface
 
                     $response->status        = Authentication::STATUS_FAILURE;
                     $response->error_message = Text::_('MAPPED_LDAP_NEW_USER_NOT_SAVED');
-
                     return;
                 }
             }
@@ -189,7 +179,6 @@ class MappedLDAP extends CMSPlugin implements SubscriberInterface
                 if (!$user->save()) {
                     $response->status        = Authentication::STATUS_FAILURE;
                     $response->error_message = Text::_('MAPPED_LDAP_NEW_USER_NOT_SAVED');
-
                     return;
                 }
             }
@@ -429,6 +418,11 @@ class MappedLDAP extends CMSPlugin implements SubscriberInterface
             $db->setQuery($query);
 
             if ($db->loadAssoc()) {
+                continue;
+            }
+
+            // Don't create new mappings to groups with core.admin access
+            if (Access::checkGroup($groupID, 'core.admin')) {
                 continue;
             }
 
@@ -729,7 +723,6 @@ class MappedLDAP extends CMSPlugin implements SubscriberInterface
         if (empty($credentials['password'])) {
             $response->status        = Authentication::STATUS_FAILURE;
             $response->error_message = Text::_('MAPPED_LDAP_EMPTY_PASSWORD');
-
             return false;
         }
 
@@ -738,21 +731,40 @@ class MappedLDAP extends CMSPlugin implements SubscriberInterface
             return true;
         }
 
-        $params     = $this->params;
-        $userParams = ComponentHelper::getParams('com_users');
+        $pParams = $this->params;
+        $rules   = $pParams->get('rules');
 
-        // The site allows registration and has a group configured
-        if ($userParams->get('allowUserRegistration')) {
-            return true;
+        // The plugin supersedes user settings.
+        if ($this->override) {
+
+            // Groups are mapped
+            if ($rules) {
+                return true;
+            }
+
+            $response->status        = Authentication::STATUS_FAILURE;
+            $response->error_message = Text::_('MAPPED_LDAP_OVERRIDE_INVALID');
+            return false;
         }
-        // The plugin supersedes user settings there is at least one mappable group
-        elseif ($this->override and $params->get('rules')) {
-            return true;
+
+        $uParams = ComponentHelper::getParams('com_users');
+
+        // The site allows registration
+        if ($defaultID = $uParams->get('allowUserRegistration')) {
+            $table = new Usergroup(Factory::getContainer()->get(DatabaseInterface::class));
+
+            // The user configured default group is valid
+            if ($table->load($defaultID)) {
+                return true;
+            }
+
+            $response->status        = Authentication::STATUS_FAILURE;
+            $response->error_message = Text::_('MAPPED_LDAP_DEFAULT_INVALID');
+            return false;
         }
 
         $response->status        = Authentication::STATUS_FAILURE;
-        $response->error_message = Text::_('MAPPED_LDAP_USER_NOT_REGISTERED');
-
+        $response->error_message = Text::_('MAPPED_LDAP_MANUAL_REGISTRATION');
         return false;
     }
 }

@@ -3,22 +3,20 @@
     <author>James Antrim</author>
     <authorEmail>james.antrim@nm.thm.de</authorEmail>
     <authorUrl>www.thm.de</authorUrl>
-    <config addfieldpath="/plugins/authentication/mapped_ldap/Fields" addfieldprefix="THM\MappedLDAP\Fields">
+    <config>
         <fields name="params">
-            <fieldset name="basic" addfieldpath="/plugins/authentication/mapped_ldap/Fields">
-                <field name="default" type="UsersDefault" label="MAPPED_LDAP_USERS_DEFAULT"
-                       description="MAPPED_LDAP_USERS_DEFAULT_DESC"/>
-                <field name="override" type="Override" label="MAPPED_LDAP_OVERRIDE" class="btn-group btn-group-yesno" default="0"
-                       filter="integer">
-                    <option value="0">JNO</option>
+            <fieldset name="basic">
+                <field name="override" type="radio" label="MAPPED_LDAP_OVERRIDE" class="btn-group btn-group-yesno" default="1"
+                       description="MAPPED_LDAP_OVERRIDE_DESC">
                     <option value="1">JYES</option>
+                    <option value="0">JNO</option>
                 </field>
                 <field name="domain" type="text" label="MAPPED_LDAP_EMAIL_DOMAIN" description="MAPPED_LDAP_EMAIL_DOMAIN_DESC"
                        hint="thm.de" size="20"/>
                 <field name="rules" type="subform" label="MAPPED_LDAP_RULES" description="MAPPED_LDAP_RULES_DESC"
                        buttons="add,remove" layout="joomla.form.field.subform.repeatable-table" multiple="true">
                     <form>
-                        <field name="groupID" type="GroupID" label="MAPPED_LDAP_USER_GROUP" required="true">
+                        <field name="groupID" type="usergrouplist" label="MAPPED_LDAP_USER_GROUP" required="true">
                             <option value="">MAPPED_LDAP_SELECT_USER_GROUP</option>
                         </field>
                         <field name="ldap_group" type="text" label="MAPPED_LDAP_LDAP_GROUP"
@@ -75,7 +73,6 @@
     <description>MAPPED_LDAP_DESC</description>
     <files>
         <file>MappedLDAP.php</file>
-        <folder>Fields</folder>
         <folder>language</folder>
         <folder plugin="mapped_ldap">services</folder>
     </files>
@@ -87,10 +84,11 @@
     </languages>
     <licence>GNU GPL v.3</licence>
     <name>plg_mapped_ldap</name>
+    <namespace>THM\MappedLDAP</namespace>
     <updateservers>
         <server type="extension" name="Mapped LDAP Plugin Update Site" priority="1">
             https://github.com/James-Antrim/plg_mapped_ldap/raw/main/update.xml
         </server>
     </updateservers>
-    <version>5.0.0</version>
+    <version>5.0.1</version>
 </extension>

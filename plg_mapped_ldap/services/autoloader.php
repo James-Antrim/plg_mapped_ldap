@@ -18,14 +18,5 @@ spl_autoload_register(function ($originalClassName) {
         return;
     }
 
-    if (reset($classNameParts) === 'Fields') {
-        array_shift($classNameParts);
-        $field    = strtolower(array_shift($classNameParts));
-        $filepath = JPATH_ROOT . "/plugins/authentication/mapped_ldap/Fields/$field.php";
-    }
-    else {
-        $filepath = JPATH_ROOT . "/plugins/authentication/mapped_ldap/MappedLDAP.php";
-    }
-
-    require_once $filepath;
+    require_once JPATH_ROOT . "/plugins/authentication/mapped_ldap/MappedLDAP.php";
 });
